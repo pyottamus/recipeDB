@@ -174,7 +174,7 @@ class Itemizer:
             #add extra outputs
             #for product in sitem.recipe.products:
             #    if product
-            self.extra_out[sitem.item] = total_count_rem
+            #self.extra_out[sitem.item] = total_count_rem
             sitem_rcount = real_count // sitem_pcount
             self.out[sitem.item] += real_count
         else:
