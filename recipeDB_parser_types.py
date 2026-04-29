@@ -112,7 +112,7 @@ class GenericComponentMaterializedVarname:
         self.original = original
         self.material = material
     def __repr__(self):
-        return f'{self.__class__.__name__}({self.material!r})'
+        return f'{type(self).__name__}({self.material!r})'
     def substitute(self, item: Varname | MaterializedVarname) -> SubstitutedMaterializedVarname:
 
         if isinstance(item, MaterializedVarname):
@@ -147,7 +147,7 @@ class GenericMaterialMaterializedVarname:
         self.original = original
         self.component = component
     def __repr__(self):
-        return f'{self.__class__.__name__}({self.name!r})'
+        return f'{type(self).__name__}({self.name!r})'
     def substitute(self, item: Varname | MaterializedVarname) -> SubstitutedMaterializedVarname:
         if isinstance(item, MaterializedVarname):
             raise ValueError("Cannot substitute a MaterializedVarname into a GenericMaterialtMaterializedVarname")
@@ -332,7 +332,7 @@ class QuantifiedItem(QuantifiedValue):
         elif isinstance(item, (NamedItem, MaterializedComponent)):
             return Quantified(self.quantity, item)
         else:
-            raise SymbolTypeError(f"Invalid type for quantified item {item.__class__.__name__!r}", NamedItem | Tool | MaterializedVarname, item.__class__)
+            raise SymbolTypeError(f"Invalid type for quantified item {type(item).__name__!r}", NamedItem | Tool | MaterializedVarname, type(item))
 
 class QuantifiedFluid(QuantifiedValue):
     __slots__ =  ()
@@ -349,7 +349,7 @@ class QuantifiedFluid(QuantifiedValue):
             if sym is None:
                 raise UndefinedSymbolError(f"Undefined fluid {self.item.name!r}", self.item.name)
             elif not sym.fluid:
-                raise NotAFluidError(f"Cannot convert non-fluid {sym.qname!r} defined as type {sym.__class__.__name__} into a fluid", self, sym)
+                raise NotAFluidError(f"Cannot convert non-fluid {sym.qname!r} defined as type {type(sym).__name__} into a fluid", self, sym)
             return Quantified(self.quantity, sym)
         else:
             if self.item.name != 'fluid':
@@ -371,7 +371,7 @@ class NormalPrefixSpec(Parsed):
     spec: Prefix
     items: list[Varname]
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.items})"
+        return f"{type(self).__name__}({self.items})"
 class Named(NormalPrefixSpec):
     __slots__ = ()
 class Tools(NormalPrefixSpec):
@@ -389,14 +389,14 @@ class Materialized(Parsed):
     spec: Prefix
     items: list[Varname]
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.items})"
+        return f"{type(self).__name__}({self.items})"
 @dataclass(slots=True)
 class MaterializeStar(Parsed):
     spec: Prefix
     components: list[Varname]
     materials: list[Varname]
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.components}, {self.materials})"
+        return f"{type(self).__name__}({self.components}, {self.materials})"
 
 @dataclass(slots=True)
 class MaterialzeStarItem:

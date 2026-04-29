@@ -1,17 +1,17 @@
-
 from .quantified import QuantifiedMixin
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .recipeDB_parser_types import QuantifiedValue
+    from .recipeDB_parser_types import QuantifiedValue, TierSpec
+
 
 class NameStrMixin:
     __slots__ = ()
     def __str__(self):
         return self.name
     def __repr__(self):
-        return f'{self.__class__.__name__}({self.name})'
+        return f'{type(self).__name__}({self.name})'
 
 
         
@@ -51,7 +51,7 @@ class NamedResource(NameStrMixin):
             return NotImplemented
         return other.name == self.name
     def __hash__(self):
-        return hash((self.__class__, self.name))
+        return hash((type(self), self.name))
     @classmethod
     def conv(cls, key):
         if isinstance(key, cls):
@@ -134,7 +134,8 @@ class NamedItem(NamedItemBase):
     @property
     def qname(self) -> str:
         return f"{self.name}"
-
+    def __repr__(self):
+        return self.name
 @dataclass(slots=True, repr=False, frozen=True)
 class FluidBase(NamedItemBase):
     @property
@@ -151,7 +152,7 @@ class MaterializedFluid(FluidBase):
     def qname(self) -> str:
         return f"fluid[{self.material.name}]"
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}[{self.material.name}]"
+        return f"{type(self).__name__}[{self.material.name}]"
     def __init__(self, material: Material):
         object.__setattr__(self, 'component', fluid)
         object.__setattr__(self, 'material', material)
@@ -204,3 +205,31 @@ class QuantifiedToolError(ValueError):
     def __init__(self, msg: str, tool_name: str):
         super().__init__(msg)
         self.tool_name = tool_name
+
+@dataclass(slots=True, frozen=True, order=True)
+class CircuitedTieredStation:
+    station: Station
+    tier: TierSpec
+    circuit: int = 0
+    def __str__(self):
+        if self.circuit != 0:
+            circuit_spec = f"<{self.circuit}>"
+        else:
+            circuit_spec = ""
+
+        return f"{self.tier.name} {self.station.name}{circuit_spec}"
+    def __init__(self, station: Station, tier: TierSpec, circuit: int=0):
+        if not isinstance(circuit, int):
+            raise TypeError(f"Circuit must be an integer, not {type(circuit)}")
+        if circuit > 24 or circuit < 0:
+            raise RuntimeError(f"Invalid circuit {circuit}")
+        object.__setattr__(self, 'station', station)
+        object.__setattr__(self, 'tier', tier)
+        object.__setattr__(self, 'circuit', circuit)
+    def __repr__(self):
+        ret = f"{type(self).__name__}(station={self.station.name}, tier={self.tier.name}"
+        if self.circuit != 0:
+            ret += f", circuit={self.circuit})"
+        else:
+            ret += ")"
+        return ret

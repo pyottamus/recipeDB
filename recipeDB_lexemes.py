@@ -9,7 +9,7 @@ class Lexeme:
         self.pos = pos
         self.length = length
     def __repr__(self):
-        return f'{self.__class__.__name__}()'
+        return f'{type(self).__name__}()'
 class Colon(Lexeme):
     __slots__ = ()
 class SemiColon(Lexeme):
@@ -37,14 +37,14 @@ class Generic(Lexeme):
         super().__init__(start_line, end_line, pos, length)
         self.name = name
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.name!r})"
+        return f"{type(self).__name__}({self.name!r})"
 class Comment(Lexeme):
     __slots__ = "text",
     def __init__(self, start_line: int, end_line: int, pos: int, length: int, text: str):
         super().__init__(start_line, end_line, pos, length)
         self.text = text
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.text!r})"
+        return f"{type(self).__name__}({self.text!r})"
 
 class SingleLineComment(Comment):
     __slots__ = ()
@@ -56,7 +56,7 @@ class Prefix(Lexeme):
     def prefix(self):
         raise NotImplementedError
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.prefix})"
+        return f"{type(self).__name__}({self.prefix})"
 class PrefixType(IntEnum):
     station = 0
     component = 1
@@ -115,7 +115,7 @@ class Number(Lexeme):
         super().__init__(start_line, end_line, pos, length)
         self.amount = amount
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.amount})"
+        return f"{type(self).__name__}({self.amount})"
 class FluidSuffix(IntEnum):
     L = 0
     mB = 1
@@ -145,7 +145,7 @@ class FluidSpec(Lexeme):
         else:
             raise RuntimeError(f"Unknown fluid suffix {self.suffix.name}")
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.amount}{self.suffix.name})"
+        return f"{type(self).__name__}({self.amount}{self.suffix.name})"
 
 type VarnameLike = Varname | MaterializedVarname
 class Varname(Lexeme):

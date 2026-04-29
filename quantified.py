@@ -1,20 +1,20 @@
 from functools import wraps
 import types
 from dataclasses import dataclass, field
-from collections.abc import Sequence
-from typing import Any
-
+from collections.abc import Sequence, Set
+from typing import Any, Iterable
 
 
 #from .recipeDB_types import NamedItem, Tool, Component, MaterializedComponent
 
 
-@dataclass(frozen=True, repr=False, slots=True)
+@dataclass(repr=False, slots=True)
 class Quantified[T]:
 
     count: int
     val: T
-
+    def copy(self) -> Quantified[T]:
+        return Quantified(self.count, self.val)
     def __le__(self, other: Quantified[T]):
         if self.val == other.val:
             return self.count < other.count
@@ -26,7 +26,7 @@ class Quantified[T]:
     def __eq__(self, other: Quantified[T]):
         return self.val == other.val and self.count == other.count
     def __hash__(self):
-        return hash((type(self), self.val, self.count))
+        return hash((type(self),  self.count, self.val))
     @property
     def count_repr(self) -> str:
         count = f'{self.count}'
@@ -40,21 +40,42 @@ class Quantified[T]:
         return self.val.fluid
     def __repr__(self):
         val = self.val
-        return f'{self.count_repr} * {val!r}'
-
+        return f'{self.count_repr} {val!r}'
+    def __mul__(self, count: int):
+        return Quantified[T](self.count * count, self.val)
+    def __rmul__(self, count: int):
+        return Quantified[T](self.count * count, self.val)
+    def __imul__(self, count: int):
+        self.count *= count
+    def __isub__(self, other: Quantified[T] | int):
+        if isinstance(other, Quantified):
+            if self.val != other.val:
+                raise TypeError(f"Cannot subtract other of type {other.val} from {self.val}")
+            other = other.count
+        if self.count <= other:
+            raise RuntimeError(f"Cannot subtract other of count {other} which is greater than or equal to {self.count}")
+        self.count -= other
+        return self
+    def __sub__(self, other: int | Quantified[T]):
+        copy = self.copy()
+        copy.__isub__(other)
+        return copy
     def __getitem__(self, key):
-        return Quantified(self.count, self.val[key])
+        return Quantified[T](self.count, self.val[key])
 
-def quantify[T](arg: Quantified[T] | T, *args: tuple[Quantified[T] | T, ...]):
+type SemiQuantifiedIterable[T] = Sequence[Quantified[T] | T] | Set[Quantified[T] | T] | Iterable[Quantified[T] | T]
+
+def quantify[T](arg: Quantified[T] | T, *args: tuple[Quantified[T] | T, ...]) -> Quantified[T] | list[Quantified[T]]:
     if len(args) == 0:
         return arg if isinstance(arg, Quantified) else Quantified(1, arg)
     else:
         return [x if isinstance(x, Quantified) else Quantified(1, x) for x in (arg, *args)]
 
-def quantify_list[T](lst: Sequence[Quantified[T] | T]) -> list[Quantified[T]]:
+def quantify_list[T](lst: SemiQuantifiedIterable[T]) -> list[Quantified[T]]:
     return [x if isinstance(x, Quantified) else Quantified(1, x) for x in lst]
 
-
+def quantify_tuple[T](lst: SemiQuantifiedIterable[T]) -> tuple[Quantified[T], ...]:
+    return tuple((x if isinstance(x, Quantified) else Quantified(1, x) for x in lst))
 
 class QuantifiedMixin:
     def __mul__(self, count: int):
@@ -70,9 +91,9 @@ def dequantify(elem):
 
 
 class QuantifiedDict[T](dict[T, int]):
-    @wraps(dict.copy)
     def copy(self) -> QuantifiedDict[T]:
-        return QuantifiedDict(super().copy())
+        return QuantifiedDict[T](super().copy())
+
     @classmethod
     def from_list(cls, items: Sequence[Quantified[T] | T]):
         items = quantify_list(items)
@@ -89,11 +110,24 @@ class QuantifiedDict[T](dict[T, int]):
         for val, count in self.items():
             out.append(Quantified(count, val))
         return out
+    def to_tuple(self) -> tuple[Quantified[T], ...]:
+        return tuple(self.to_list())
+    def reduce(self, key: T, amount: int):
+        if (val:=self.get(key)) is None:
+            return amount
+        if val > amount:
+            self[key] -= val
+            return 0
+        elif val == amount:
+            del self[key]
+            return 0
+        else:
+            del self[key]
+            return amount - val
     def pop(self, key):
         return super().pop(key, 0)
-    def dec_jz(self, key):
+    def dec_jz(self, key: T):
         if (val := self.get(key)) is None:
-            #print(self, key)
             raise RuntimeError
 
         val -= 1
@@ -178,19 +212,31 @@ class QuantifiedDict[T](dict[T, int]):
                 self[key] = sval
             
             
-    def __isub__(self, other: QuantifiedDict[T]):
-        for key in (self.keys() & other.keys()):
-            sval = self[key]
-            oval = other[key]
-            if sval <= oval:
-                del self[key]
+    def __isub__(self, other: QuantifiedDict[T] | Quantified[T]):
+        if isinstance(other, QuantifiedDict):
+            for key in (self.keys() & other.keys()):
+                sval = self[key]
+                oval = other[key]
+                if sval <= oval:
+                    del self[key]
+                else:
+                    self[key] = sval - oval
+        else:
+            sval = self[other.val]
+            if sval <= other.count:
+                del self[other.val]
             else:
-                self[key] = sval - oval
+                self[other.val] = sval - other.count
         return self
-    def __iadd__(self, other: QuantifiedDict[T]):
-        for k, v in other.items():
-            self[k] += v
+    def __iadd__(self, other: QuantifiedDict[T] | Quantified[T]):
+        if isinstance(other, QuantifiedDict):
+            for k, v in other.items():
+                self[k] += v
+        else:
+            self[other.val] += other.count
+
         return self
     def __add__(self, other: QuantifiedDict[T]):
         new = self.copy()
         return new.__iadd__(other)
+

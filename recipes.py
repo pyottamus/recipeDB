@@ -1,3 +1,6 @@
+from collections.abc import Sequence, Set, Iterable
+
+from .quantified import quantify, quantify_list, SemiQuantifiedIterable, quantify_tuple
 from .recipeDB_parser_types import TierSpec
 from .recipeDB_types import *
 from .recipeDB_conv import *
@@ -20,8 +23,30 @@ def unify(items):
     for item in items:
         sum_items.add(item)
     
-    return sum_items.to_list()
+    return sum_items.to_tuple()
+
 class RecipeBase:
+    products: tuple[Quantified[NamedItemBase], ...]
+    items: tuple[Quantified[NamedItemBase], ...]
+    station: Station
+    tools: tuple[Tool, ...]
+    tier: TierSpec
+    circuit: int
+    dependencies: set[RecipeBase]
+    solved: bool
+    def __repr__(self):
+        if len(self.products) == 1:
+            products = repr(self.products[0])
+        else:
+            products = repr(self.products)
+
+        return f"<RecipeBase: {products}>"
+
+
+    def __eq__(self, other: RecipeBase):
+        return self.products == other.products and self.items == other.items and self.station == other.station and self.tools == other.tools and self.tier == other.tier
+    def __hash__(self):
+        return hash((type(self), self.products, self.items, self.station, self.tools, self.tier, self.station))
     def get_product_count(self, product):
         for item in self.products:
             if item.val == product:
@@ -32,24 +57,49 @@ class RecipeBase:
         self = super().__new__(cls)
         self._init(products, items, station, tools)
         return self
-    def _init(self, products: list[Quantified[NamedItemBase]],
-              items: list[Quantified[NamedItemBase]], tier: TierSpec,
-              station: Station, tools: list[Tool]):
+    def _init(self, products: tuple[Quantified[NamedItemBase], ...],
+              items: tuple[Quantified[NamedItemBase], ...],
+              tier: TierSpec,
+              circuit: int,
+              station: Station,
+              tools: tuple[Tool, ...]):
         self.tools = tools
         self.items = unify(items)
         self.tier = tier
+        self.circuit = circuit
         self.station = station
         self.products = unify(products)
+        self.dependencies = set[RecipeBase]()
+        self.solved = False
 
-    def __init__(self, products: list[Quantified[NamedItemBase]],
-                 items: list[Quantified[NamedItemBase]],
+    def add_dependency(self, recipe: RecipeBase):
+        self.dependencies.add(recipe)
+
+    def __init__(self,
+                 products: SemiQuantifiedIterable[NamedItemBase] | Quantified[NamedItemBase] | NamedItemBase,
+                 items: SemiQuantifiedIterable[NamedItemBase],
                  tier: TierSpec,
-                 station,
-                 tools: list[Tool]):
-        products = products
-        station = station
-        self._init(products, items, tier, station, tools)
+                 circuit: int,
+                 station: Station,
+                 tools: Sequence[Tool] | None):
+        if tools is None:
+            tools = ()
+        else:
+            tools = tuple(tools)
+        if isinstance(products, NamedItemBase):
+            products = (Quantified(1, products),)
+        elif isinstance(products, Quantified):
+            products = (products,)
+        else:
+            products = quantify_tuple(products)
 
+        items = quantify_tuple(items)
+
+        station = station
+        self._init(products, items, tier,circuit, station, tools)
+
+    def is_main(self, product: Item):
+        return self.products[0].val == product
     def __str__(self):
         o = ', '.join(map(str, self.products))
 
@@ -73,10 +123,10 @@ class RecipeBase:
         return None
 
 class Recipe(RecipeBase):
-    def __init__(self, products, items, tier: TierSpec, station=workbench, tools=None):
-        super().__init__(products, items, tier, station, tools)
-        #RecipeDB.add_recipe(self)
+    def __init__(self, products, items, tier: TierSpec, circuit: int, station=workbench, tools=None):
+        super().__init__(products, items, tier, circuit, station, tools)
 
+"""
 class MaterializedComponentRecipe(RecipeBase):
     @property
     def component(self):
@@ -122,4 +172,4 @@ class ComponentRecipe:
         #    return ret
         ret = self._materialize(material)
         return ret
-
+"""
