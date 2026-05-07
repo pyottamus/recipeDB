@@ -1,7 +1,9 @@
-from dataclasses import dataclass
 from pathlib import Path
+from typing import NoReturn
+
 from .recipeDB_lexemes import *
-                    
+
+__all__ = ["Lexer"]
 class Lexer:
     def __init__(self, file: Path):
         self.file = file
@@ -19,7 +21,6 @@ class Lexer:
         self.line += 1
         self.linetab.append(self.pos)
     def inc_linetab(self):
-        linetab_len = len(self.linetab)
         while self.pos < len(self.data) and self.data[self.pos] != '\n':
             self.pos += 1
         if self.pos != len(self.data):
@@ -68,7 +69,7 @@ class Lexer:
         while self.pos < len(self.data) and self.data[self.pos] != '\n':
             self.pos += 1
         return self.data[start:self.pos]
-    def error(self, start_line: int, start_pos: int, msg: str):
+    def error(self, start_line: int, start_pos: int, msg: str) -> NoReturn:
         start_pos += 1
         end_line_inclusive = self.line
         end_pos = self.pos
@@ -80,7 +81,7 @@ class Lexer:
         line_end_pos = self.linetab[end_line_inclusive + 1 - 1]
         self.decrease_linetab(increased)
         start_col = start_pos - line_start_pos 
-        raise RuntimeError(f"{msg}\n\tError Occured on line {start_line}, offset {start_col}\nFull lines follows After line break\n{self.data[line_start_pos:line_end_pos]}")
+        raise RuntimeError(f"{msg}\n\tError Occurred on line {start_line}, offset {start_col}\nFull lines follows After line break\n{self.data[line_start_pos:line_end_pos]}")
     def skip_sp_special(self):
         """ Skips whitespace. Takes care of line continuation ( "text \\\n moretext"). Returns True if end of prefix is found."""
         while self.pos < len(self.data):

@@ -1,13 +1,18 @@
 import math
-#from dataclasses import dataclass
-
-from .quantified import quantify_list
+from typing import Any, Sequence, Set
+from dataclasses import dataclass
+from .quantified import quantify_list, QuantifiedDict, Quantified
+from .recipeDB_types import *
+from .recipes import *
+from .recipeDB_parser_types import TierSpec
 from .recipeDB import *
 from multimethod import multimethod
-
-type prebuilt_type = QuantifiedDict[NamedItemBase] | Sequence[Quantified[NamedItemBase] | NamedItemBase] | None
 from .recipe_graph import *
 from collections import defaultdict
+
+__all__ = ["RecipeSolver", "Solver", "ItemizerResult2", "ItemizerResult", "Itemizer2", "Itemizer"]
+type prebuilt_type = QuantifiedDict[NamedItemBase] | Sequence[Quantified[NamedItemBase] | NamedItemBase] | None
+
 def ceil_round(a, b):
     return ((a + b - 1) // b) * b
 
@@ -103,7 +108,10 @@ class OrderedSet[T]:
 class StationList(OrderedSet[CircuitedTieredStation]):
     @multimethod
     def insert(self, circuited_tiered_station: CircuitedTieredStation):
+        if CircuitedTieredStation.station is NullStation:
+            return
         self._set[circuited_tiered_station] = None
+
     @multimethod
     def insert(self, station: Station, tier: TierSpec, circuit: int=0):
         circuited_tiered_station = CircuitedTieredStation(station, tier, circuit)
@@ -170,7 +178,7 @@ class RecipeSolver:
         return self.fake_recipe
     def __init__(self, db: RecipeDB, items: Sequence[NamedItemBase] | set[NamedItemBase]):
         self.fake_item = Item()
-        self.fake_recipe = Recipe([Quantified(1, self.fake_item)], items, TierSpec.ULV, 0, None, [])
+        self.fake_recipe = Recipe([Quantified(1, self.fake_item)], items, TierSpec.ULV, 0, NullStation, [])
         self.graph = RecipeGraph(self.fake_recipe)
         self.db = db
         self._process()
@@ -250,7 +258,7 @@ class Itemizer2:
             prebuilt = prebuilt
         else:
             assert isinstance(prebuilt,
-                              Sequence), f"Expected QuantifiedDict[NamedItemBase] or Sequence[Quantified[NamedItemBase] | NamedItemBase], got {type(prebuilt).__name__}"
+                              (Sequence, Set)), f"Expected QuantifiedDict[NamedItemBase] or Sequence[Quantified[NamedItemBase] | NamedItemBase], got {type(prebuilt).__name__}"
             prebuilt = QuantifiedDict[NamedItemBase].from_list(prebuilt)
 
         stations = StationList()
@@ -322,6 +330,7 @@ class Itemizer2:
                     continue
                 else:
                     needed += item
+
         return ItemizerResult2(units, extra, produced, prebuilt_out, stations, tools)
 
 
@@ -490,7 +499,7 @@ class UnionSolverItem(BaseSolverItem):
             raise ValueError("UnionSolverItem must have at least 1 item")
 
         self.fake_item = Item()
-        self.fake_recipe = RecipeBase([Quantified(1, self.fake_item)], quantify_list(items), TierSpec.ULV, 0,None, [])
+        self.fake_recipe = RecipeBase([Quantified(1, self.fake_item)], quantify_list(items), TierSpec.ULV, 0,NullStation, [])
         self.fake_sitem = SolverItem(self.fake_item, db, False, self.fake_recipe)
         super().__init__(self.fake_item, db, False, self.fake_recipe)
 
@@ -575,11 +584,6 @@ class Solver:
         result = self.sitem_calc(fake_sitem, prebuilt)
         del result.out[fake_sitem.item]
         return result
-    def solve_solver2(self, items: list[NamedItemBase | Quantified[NamedItemBase]], prebuilt=None):
-        items = quantify_tuple(items)
-        fake_item = Item()
-        fake_recipe = RecipeBase([Quantified(1, fake_item)], items, TierSpec.ULV, 0, None, [])
-        return Itemizer2(fake_recipe, self.db)
     def sitem_calc(self, sitem: BaseSolverItem, prebuilt: prebuilt_type = None) -> ItemizerResult:
         return Itemizer(1, sitem, self.item_map, prebuilt).calc()
 

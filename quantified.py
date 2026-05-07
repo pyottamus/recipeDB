@@ -1,12 +1,9 @@
-from functools import wraps
-import types
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from collections.abc import Sequence, Set
-from typing import Any, Iterable
+from typing import Iterable
 
-
-#from .recipeDB_types import NamedItem, Tool, Component, MaterializedComponent
-
+__all__ = ["Quantified", "QuantifiedDict", "SemiQuantifiedIterable", "dequantify", "quantify", "quantify_tuple",
+           "quantify_list", "QuantifiedMixin"]
 
 @dataclass(repr=False, slots=True)
 class Quantified[T]:
@@ -145,7 +142,7 @@ class QuantifiedDict[T](dict[T, int]):
     def add(self, quant: Quantified[T]):
         self[quant.val] += quant.count
     def reduce_sub(self, quant: Quantified[T], val: T | None=None, /, diff_out: QuantifiedDict[T]=None):
-        
+
         if val is None:
             from_quant=True
             val = quant.val
@@ -153,7 +150,7 @@ class QuantifiedDict[T](dict[T, int]):
         else:
             from_quant=False
             qcount = quant
-        
+
         if (count := self.get(val)) is None:
             return quant
 
@@ -165,14 +162,14 @@ class QuantifiedDict[T](dict[T, int]):
         else:
             self[val] = -diff
             leftover = 0
-        
+
         if diff_out is not None:
             diff_out[val] += qcount - leftover
 
         if leftover:
             return Quantified(leftover, val) if from_quant else leftover
         else:
-            return None if from_quant else 0        
+            return None if from_quant else 0
 
     def add_val(self, quant: Quantified[T]):
         """ add quant to dict set.
@@ -200,8 +197,6 @@ class QuantifiedDict[T](dict[T, int]):
                 self[key] = sval
         return new_zeros
     def sub(self, other: QuantifiedDict[T]):
-        #print("SUB")
-        new_zeros = []
         for key, oval in other.items():
             sval = self[key]
             sval -= oval
@@ -210,8 +205,8 @@ class QuantifiedDict[T](dict[T, int]):
                 del self[key]
             else:
                 self[key] = sval
-            
-            
+
+
     def __isub__(self, other: QuantifiedDict[T] | Quantified[T]):
         if isinstance(other, QuantifiedDict):
             for key in (self.keys() & other.keys()):

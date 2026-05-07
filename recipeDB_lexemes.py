@@ -1,5 +1,10 @@
-from dataclasses import dataclass
 from enum import IntEnum
+
+__all__ = ["Lexeme", "Colon", "SemiColon", "LT", "GT", "LCurly", "RCurly", "LParen", "RParen", "Comma",
+           "GenericDecl", "Generic", "Comment", "SingleLineComment", "MultiLineComment", "Prefix", "PrefixType",
+           "MaterializeStarPrefix", "MaterializePrefix", "StationPrefix", "ComponentPrefix", "MaterialPrefix",
+           "FluidPrefix", "ToolPrefix", "NamedPrefix", "EOP", "Number", "FluidSuffix", "FluidSpec", "VarnameLike",
+           "Varname", "MaterializedVarname", "EOF", "SPACE_CHARS", "DELIM_CHARS"]
 
 class Lexeme:
     __slots__ = "start_line", "end_line", "pos", "length"

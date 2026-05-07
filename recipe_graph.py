@@ -1,12 +1,12 @@
 from collections import defaultdict
-
-from pandas.core.indexes.api import default_index
-
+from dataclasses import dataclass
+from .recipeDB_types import Item
 from .recipes import *
+
+__all__ = ["RecipeGraph", "RecipeGraphNode"]
 @dataclass(slots=True)
 class RecipeGraphNode:
     recipe: RecipeBase
-    #in_edges: list[RecipeGraphNode]
     out_edges: list[RecipeGraphNode]
     mark: int
     def __init__(self, recipe: RecipeBase):

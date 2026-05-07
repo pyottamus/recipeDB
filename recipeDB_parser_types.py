@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from abc import ABC, abstractmethod
 from enum import IntEnum
 
 from .recipeDB_types import NamedItem, MaterializedFluid, Tool, UndefinedSymbolError, QuantifiedToolError, \
@@ -8,7 +8,20 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .recipeDB import RecipeDB
 from .recipeDB_lexemes import *
-
+from dataclasses import dataclass
+__all__ = ['Colon', 'Comma', 'Comment', 'Component', 'ComponentPrefix', 'Components', 'EOF', 'EOP', 'Expression',
+           'FluidPrefix', 'FluidSpec', 'FluidSuffix', 'Fluids', 'GT', 'Generic', 'GenericComponentMaterializedVarname',
+           'GenericDecl', 'GenericItem', 'GenericMaterialMaterializedVarname', 'GenericRecipeDeclaration',
+           'ImpliedNumber', 'IntEnum', 'LCurly', 'LParen', 'LT', 'Lexeme', 'MachineSpec', 'Material', 'MaterialPrefix',
+           'MaterializePrefix', 'MaterializeStar', 'MaterializeStarPrefix', 'Materialized', 'MaterializedComponent',
+           'MaterializedFluid', 'MaterializedVarname', 'Materials', 'MaterializeStarItem', 'MultiLineComment', 'Named',
+           'NamedItem', 'NamedPrefix', 'NormalPrefixSpec', 'NotAFluidError', 'NotAMaterializedFluidError', 'Number',
+           'Parsed', 'PartialGenericRecipe', 'Prefix', 'PrefixType', 'Quantified', 'QuantifiedFluid', 'QuantifiedItem',
+           'QuantifiedToolError', 'QuantifiedValue', 'RCurly', 'RParen', 'RecipeDeclaration',
+           'ResolvedGenericRecipeDeclaration', 'ResolvedMaterializedVarname', 'ResolvedVarname', 'SemiColon',
+           'SingleLineComment', 'StationPrefix', 'Stations', 'SubstitutedMaterializedVarname',
+           'SubstitutedRecipeDeclaration', 'SubstitutedVarname', 'SymbolTypeError', 'TierSpec', 'Tool', 'ToolPrefix',
+           'Tools', 'UndefinedSymbolError', 'Varname', 'ImpliedNumberSingleton', 'quantified_value', 'Workbench_spec']
 @dataclass(slots=True)
 class SubstitutedVarname:
     original: Varname
@@ -150,7 +163,7 @@ class GenericMaterialMaterializedVarname:
         return f'{type(self).__name__}({self.name!r})'
     def substitute(self, item: Varname | MaterializedVarname) -> SubstitutedMaterializedVarname:
         if isinstance(item, MaterializedVarname):
-            raise ValueError("Cannot substitute a MaterializedVarname into a GenericMaterialtMaterializedVarname")
+            raise ValueError("Cannot substitute a MaterializedVarname into a GenericMaterialMaterializedVarname")
         return SubstitutedMaterializedVarname(self, item, self.name, item.name)
 
 class Expression:
@@ -158,7 +171,7 @@ class Expression:
     def __init__(self, value):
         self.value = value
     def __repr__(self):
-        return f"<Exrpression {self.value!r}>"
+        return f"<Expression {self.value!r}>"
 @dataclass(slots=True)
 class Parsed:
     start: Lexeme
@@ -216,7 +229,7 @@ class GenericRecipeDeclaration(Parsed):
     items: list[QuantifiedValue]
     generic_name: Varname
     def substitute(self, item: Varname | MaterializedVarname) -> SubstitutedRecipeDeclaration:
-        products = [prdocut.substitute(item) for prdocut in self.product_list]
+        products = [product.substitute(item) for product in self.product_list]
         items = [recipe_item.substitute(item) for recipe_item in self.items]
         return SubstitutedRecipeDeclaration(self, products, self.tier, self.machine, self.circuit, items)
 
@@ -293,7 +306,7 @@ class ImpliedNumber:
         return 1
 ImpliedNumberSingleton = ImpliedNumber()
 
-class QuantifiedValue:
+class QuantifiedValue(ABC):
     __slots__ = "quantity", "item", "original_spec"
     @property
     def generic(self):
@@ -304,6 +317,9 @@ class QuantifiedValue:
     @property
     def material(self):
         return self.item.material
+    @abstractmethod
+    def resolve(self, db: RecipeDB):
+        ...
     def __init__(self, quantity: Number | ImpliedNumber | FluidSpec, item: Varname | MaterializedVarname | GenericItem | GenericMaterialMaterializedVarname | GenericComponentMaterializedVarname):
         self.item = item
         self.quantity = quantity.amount
@@ -339,7 +355,7 @@ class QuantifiedFluid(QuantifiedValue):
     @property
     def units(self) -> FluidSuffix:
         return FluidSuffix.L
-    def __init__(self, quantity: FluidSpec, item: Varname | MaterializedVarname | GenericItem | MaterializedGeneric):
+    def __init__(self, quantity: FluidSpec, item: Varname | MaterializedVarname):
         super().__init__(quantity, item)
     def resolve(self, db: RecipeDB):
         if self.generic:
@@ -361,7 +377,7 @@ class QuantifiedFluid(QuantifiedValue):
                 raise NotAFluidError(f"Cannot convert non-fluid {self.item.qname!r} into a fluid", self, sym)
             return Quantified(self.quantity, sym)
 
-def quantifiedValue(quantity: Number | ImpliedNumber | FluidSpec, item  : Varname | MaterializedVarname | GenericItem | GenericComponentMaterializedVarname | GenericMaterialMaterializedVarname) -> QuantifiedFluid | QuantifiedItem:
+def quantified_value(quantity: Number | ImpliedNumber | FluidSpec, item  : Varname | MaterializedVarname | GenericItem | GenericComponentMaterializedVarname | GenericMaterialMaterializedVarname) -> QuantifiedFluid | QuantifiedItem:
     if isinstance(quantity, FluidSpec):
         return QuantifiedFluid(quantity, item)
     else:
@@ -387,7 +403,7 @@ class Fluids(NormalPrefixSpec):
 @dataclass(slots=True)
 class Materialized(Parsed):
     spec: Prefix
-    items: list[Varname]
+    items: list[MaterializedVarname]
     def __repr__(self):
         return f"{type(self).__name__}({self.items})"
 @dataclass(slots=True)
@@ -399,7 +415,7 @@ class MaterializeStar(Parsed):
         return f"{type(self).__name__}({self.components}, {self.materials})"
 
 @dataclass(slots=True)
-class MaterialzeStarItem:
+class MaterializeStarItem:
     @property
     def qname(self):
         return f'{self.component.name}[{self.material.name}]'

@@ -5,7 +5,12 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .recipeDB_parser_types import QuantifiedValue, TierSpec
 
-
+__all__ = ["Item", "NamedResource", "Material", "Component", "fluid", "NamedItemBase", "MaterializedComponent",
+           "GeneralizedItem", "NamedItem", "FluidBase", "NamedFluid", "MaterializedFluid", "Tool", "Station",
+           "workbench", "Symbol", "NotAMaterializedFluidError", "NotAFluidError", "UndefinedSymbolError",
+           "SymbolTypeError", "RedeclarationError", "QuantifiedToolError", "CircuitedTieredStation", "hand",
+           "NullStation"
+          ]
 class NameStrMixin:
     __slots__ = ()
     def __str__(self):
@@ -15,9 +20,8 @@ class NameStrMixin:
 
 
         
-
+@dataclass(slots=True, frozen=True, repr=False)
 class Item(QuantifiedMixin):
-    __slots__ = ()
     @property
     def fluid(self):
         return False
@@ -84,6 +88,7 @@ class Component(NamedResource):
 
 fluid = Component('fluid')
 
+@dataclass(slots=True, frozen=True, repr=False)
 class NamedItemBase(NamedResource, Item):
     def __lt__(self, other):
         if isinstance(other, NamedItemBase):
@@ -166,7 +171,16 @@ class Tool(NamedResource):
 class Station(NamedResource):
     __slots__ = ()
 
+    @classmethod
+    def NullStationInit(cls):
+        s = cls.__new__(cls)
+        object.__setattr__(s, "name", "")
+        return s
+
 workbench = Station('workbench')
+hand = Station("hand")
+NullStation = Station.NullStationInit()
+
 type Symbol = Tool | Station | Component | MaterializedComponent | NamedItem | MaterializedFluid | NamedFluid
 
 class NotAMaterializedFluidError(ValueError):

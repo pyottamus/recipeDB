@@ -1,22 +1,11 @@
-from collections.abc import Sequence, Set, Iterable
+from collections.abc import Sequence
 
-from .quantified import quantify, quantify_list, SemiQuantifiedIterable, quantify_tuple
+from .quantified import SemiQuantifiedIterable, quantify_tuple
 from .recipeDB_parser_types import TierSpec
 from .recipeDB_types import *
-from .recipeDB_conv import *
-from .quantified import QuantifiedDict
+from .quantified import Quantified, QuantifiedDict
 
-def seperate_tools(items):
-    real_items = []
-    tools = []
-
-    for item in QuantifiedRecipeItem.list_conv(items):
-        if isinstance(item.val, Tool):
-            tools.append(item)
-        else:
-            real_items.append(item)
-
-    return real_items, tools
+__all__ = ["Recipe", "RecipeBase"]
 
 def unify(items):
     sum_items = QuantifiedDict()
@@ -34,6 +23,9 @@ class RecipeBase:
     circuit: int
     dependencies: set[RecipeBase]
     solved: bool
+    def clean(self):
+        self.solved = False
+        self.dependencies = set[RecipeBase]()
     def __repr__(self):
         if len(self.products) == 1:
             products = repr(self.products[0])
@@ -52,11 +44,7 @@ class RecipeBase:
             if item.val == product:
                 return item.count
         raise KeyError
-    @classmethod
-    def _direct_init(cls, products, items, station, tools):
-        self = super().__new__(cls)
-        self._init(products, items, station, tools)
-        return self
+
     def _init(self, products: tuple[Quantified[NamedItemBase], ...],
               items: tuple[Quantified[NamedItemBase], ...],
               tier: TierSpec,
