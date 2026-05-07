@@ -1,16 +1,14 @@
-from collections.abc import Sequence, Set
 import inspect
-
-
-from .solver import RecipeSolver, Itemizer2
-from .recipeDB_parser_types import *
-
 from collections import defaultdict
-from .quantified import QuantifiedDict, Quantified, quantify_tuple
+from collections.abc import Sequence, Set
 
+from multimethod import multimethod
+
+from .quantified import QuantifiedDict, Quantified, quantify_tuple
+from .recipeDB_parser_types import *
 from .recipeDB_types import *
 from .recipes import *
-from multimethod import multimethod
+from .solver import RecipeSolver, Itemizer2
 
 __all__ = ["RecipeDB"]
 
@@ -19,6 +17,7 @@ type input_list = NamedItemBase | \
                   Sequence[NamedItemBase | Quantified[NamedItemBase]] | \
                   Set[NamedItemBase | Quantified[NamedItemBase]] | \
                   QuantifiedDict[NamedItemBase]
+
 
 def _conv_input_list(inp: input_list) -> tuple[Quantified[NamedItemBase], ...]:
     if isinstance(inp, NamedItemBase):
@@ -32,17 +31,16 @@ def _conv_input_list(inp: input_list) -> tuple[Quantified[NamedItemBase], ...]:
         raise TypeError(type(inp))
 
 
-
 class RecipeDB:
     _sym_table: dict[str, Symbol]
     __slots__ = ("materials", "components", "materialized_components", "_sym_table", "named_items",
                  "tools", "stations", "recipes", "clean", "solved", "prev_decl", "fluids")
 
-    materials : dict[str, Material]
-    components : dict[str, Component]
-    materialized_components : defaultdict[Component, dict[Material, MaterializedComponent]]
+    materials: dict[str, Material]
+    components: dict[str, Component]
+    materialized_components: defaultdict[Component, dict[Material, MaterializedComponent]]
     _sym_table: dict[str, Symbol]
-    named_items : dict[str, NamedItem]
+    named_items: dict[str, NamedItem]
     tools: dict[str, Tool]
     stations: dict[str, Station]
     recipes: defaultdict[Item, list[Recipe]]
@@ -55,8 +53,8 @@ class RecipeDB:
                  Material: 4,
                  Component: 5,
                  MaterializedComponent: 6
-                }
-    
+                 }
+
     tbl_map = {Tool: 'tools',
                Station: 'stations',
                NamedItem: 'named_items',
@@ -64,40 +62,41 @@ class RecipeDB:
                Material: 'materials',
                Component: 'components',
                MaterializedComponent: 'materialized_components'
-              }
+               }
     dst_map = {Tool: 'tools',
                Station: 'stations'
-              }
+               }
 
     def __init__(self):
         self.materials = {}
         self.components = {}
         self.stations = {}
         self.materialized_components = defaultdict(dict)
-        #self.generalized_items = {}
+        # self.generalized_items = {}
         self.named_items = {}
         self.tools = {}
         self.stations = {}
         self.recipes = defaultdict(list)
-        #self.component_recipes = defaultdict(list)
-        #self.materialized_recipes = defaultdict(lambda: defaultdict(list))
+        # self.component_recipes = defaultdict(list)
+        # self.materialized_recipes = defaultdict(lambda: defaultdict(list))
         self._sym_table = {}
 
-        #self.fdeps = {}
-        #self.rdeps = defaultdict(list)
-        #self.template_deps = {}
-        #self.fdeps_template = {}
-        #self.rdeps_template = defaultdict(list)
+        # self.fdeps = {}
+        # self.rdeps = defaultdict(list)
+        # self.template_deps = {}
+        # self.fdeps_template = {}
+        # self.rdeps_template = defaultdict(list)
 
         self.clean = False
         self.solved = False
-        #self.disalowed_comp_mat = {}
-        #self._item_list = []
+        # self.disalowed_comp_mat = {}
+        # self._item_list = []
 
         self.add_sym(workbench)
         self.add_sym(fluid)
         self.prev_decl = {}
         self.fluids = {}
+
     def conv(self, key, typ):
         if isinstance(key, typ):
             return key
@@ -106,14 +105,16 @@ class RecipeDB:
             src = getattr(self, loc)
             return src.get(key)
         return None
-    
+
     def _get_sym_checked(self, key, typ):
         if (ret := self._sym_table.get(key)) is None:
             return None
         elif type(ret) is not typ:
-            raise TypeError(f"Cannot create {typ.__name__}({key!r}):\n\t{key!r} already defined as a {type(ret).__name__}.")
+            raise TypeError(
+                f"Cannot create {typ.__name__}({key!r}):\n\t{key!r} already defined as a {type(ret).__name__}.")
         else:
             return ret
+
     def _add_sym(self, sym):
         key = sym.name
         if isinstance(sym, MaterializedComponent):
@@ -124,13 +125,14 @@ class RecipeDB:
             dst[key] = sym
         self._sym_table[key] = sym
 
-
     def add_sym(self, sym):
         if (prev_decl := self._sym_table.get(sym.qname)) is not None:
-            raise RedeclarationError(f"Symbol '{sym.qname}' of type {type(sym).__name__} already in use as type {type(prev_decl).__name__}", sym.qname)
+            raise RedeclarationError(
+                f"Symbol '{sym.qname}' of type {type(sym).__name__} already in use as type {type(prev_decl).__name__}",
+                sym.qname)
 
         return self._add_sym(sym)
-    
+
     """
     def add_materialized_recipe(self, materialized_recipe):
         self.clean = False
@@ -149,22 +151,21 @@ class RecipeDB:
         #self.unitary_component.discard(crecipe.product.val)
         self.component_recipes[crecipe.product.val].append(crecipe)
     """
+
     def add_recipe(self, recipe):
         self.clean = False
         self.recipes[recipe.products[0].val].append(recipe)
 
-
-        #for item in recipe.items:
-            #if isinstance(item.val, MaterializedComponent):
-                #self.ensure_materialized_recipies(item.val)
+        # for item in recipe.items:
+        # if isinstance(item.val, MaterializedComponent):
+        # self.ensure_materialized_recipies(item.val)
 
     def get_named_item(self, key: str | NamedItem):
         if isinstance(key, NamedItem):
             return key
         return self.named_items.get(key)
 
-
-    def get_station(self, key:  str | Station):
+    def get_station(self, key: str | Station):
         if isinstance(key, Station):
             return key
 
@@ -179,35 +180,47 @@ class RecipeDB:
                 if val.qname in self._sym_table:
                     raise RedeclarationError(f"Redeclaration of MaterializedFluid {val.qname!r}", val.qname)
             else:
-                raise SymbolTypeError(f"Symbol {name.name!r} already exists as type {type(sym).__name__}. Attempted redeclaration as fluid", sym, MaterializedFluid)
+                raise SymbolTypeError(
+                    f"Symbol {name.name!r} already exists as type {type(sym).__name__}. Attempted redeclaration as fluid",
+                    sym, MaterializedFluid)
         else:
             val = NamedFluid(name.name)
 
         self._sym_table[val.qname] = val
         self.fluids[val.qname] = val
         self.prev_decl[val.qname] = name
+
     def resovle_type[T](self, name: str, expected_type: type[T]) -> T:
         x = self.get_sym(name)
         if x is None:
             raise UndefinedSymbolError(f"Undefined symbol {name}", name)
         if not isinstance(x, expected_type):
-            raise SymbolTypeError(f"Symbol {name} is not a {expected_type.__name__}, but a {type(x).__name__}", expected_type,
+            raise SymbolTypeError(f"Symbol {name} is not a {expected_type.__name__}, but a {type(x).__name__}",
+                                  expected_type,
                                   type(x))
         return x
+
     def resolve_component(self, name: str) -> Component:
         return self.resovle_type(name, Component)
+
     def resolve_station(self, name: str) -> Station:
         return self.resovle_type(name, Station)
+
     def resolve_material(self, name: str) -> Material:
         return self.resovle_type(name, Material)
+
     def resolve_materialized_component(self, name: str) -> MaterializedComponent:
         return self.resovle_type(name, MaterializedComponent)
+
     def resolve_tool(self, name: str) -> Tool:
         return self.resovle_type(name, Tool)
+
     def resolve_named_item(self, name: str) -> NamedItem:
         return self.resovle_type(name, NamedItem)
+
     def resolve_fluid(self, name: str) -> FluidBase:
         return self.resovle_type(name, FluidBase)
+
     def resolve_item(self, name: str):
         return self.resovle_type(name, Item)
 
@@ -236,7 +249,6 @@ class RecipeDB:
 
     def get_tools(self):
         return list(self.tools.values())
-    
 
     def is_unit(self, item: Item | Quantified[Item]):
         if isinstance(item, Quantified):
@@ -256,8 +268,9 @@ class RecipeDB:
         if not isinstance(item, Item):
             raise SymbolTypeError(f"Symbol {key!r} is not a {Item.__name__}", Item, type(key))
         return item
+
     def get_recipe(self, product: str | Item | Quantified[Item] | RecipeBase) -> RecipeBase | None:
-        #if isinstance(product, (Recipe, ComponentRecipe)):
+        # if isinstance(product, (Recipe, ComponentRecipe)):
         if isinstance(product, RecipeBase):
             return product
         elif isinstance(product, str):
@@ -271,6 +284,7 @@ class RecipeDB:
             return None
         else:
             return ret[-1]
+
     def load_symbols(self, clobber=False):
         locals = inspect.currentframe().f_back.f_locals
         for name, symbol in self._sym_table.items():
@@ -285,8 +299,10 @@ class RecipeDB:
         val = Material(varname.name)
         self.add_sym(val)
         self.prev_decl[varname.name] = varname
+
     @multimethod
-    def add_materialized_component(self, materialized_varname: MaterializedVarname, component: Component, material: Material):
+    def add_materialized_component(self, materialized_varname: MaterializedVarname, component: Component,
+                                   material: Material):
         val = MaterializedComponent(component, material)
         self.add_sym(val)
         self.prev_decl[f'{materialized_varname.name}[{materialized_varname.material}]'] = materialized_varname
@@ -303,34 +319,41 @@ class RecipeDB:
         self.add_sym(val)
         self.prev_decl[item.qname] = item
         self.clean = False
+
     def add_named_item(self, varname: Varname):
         val = NamedItem(varname.name)
         self.add_sym(val)
         self.prev_decl[varname.name] = varname
         self.clean = False
+
     def add_tool(self, varname: Varname):
         val = Tool(varname.name)
         self.add_sym(val)
         self.prev_decl[varname.name] = varname
         self.clean = False
+
     def add_station(self, varname: Varname):
         val = Station(varname.name)
         self.add_sym(val)
         self.prev_decl[varname.name] = varname
         self.clean = False
+
     def add_component(self, varname: Varname):
         val = Component(varname.name)
         self.add_sym(val)
         self.prev_decl[varname.name] = varname
         self.clean = False
+
     def _clean(self):
         for recipe_list in self.recipes.values():
             for recipe in recipe_list:
                 recipe.clean()
         self.clean = True
+
     def _solve(self):
         RecipeSolver(self, self.get_items())
         self.solved = True
+
     def solve(self):
         if self.clean and self.solved:
             # clean and solved, no solving nessasary
@@ -344,14 +367,16 @@ class RecipeDB:
         elif not self.clean and not self.solved:
             # not clean, but never solved. no need to do a clean.
             self._solve()
-    def calc(self, to_build: input_list, prebuilt: input_list=None) -> Itemizer2:
-        #self.solve()
+
+    def calc(self, to_build: input_list, prebuilt: input_list = None) -> Itemizer2:
+        # self.solve()
         # solve not nessasary since this function calls itemize whichs calls solve
         if prebuilt is not None:
             prebuilt = _conv_input_list(prebuilt)
 
         itemizer = self.itemize(to_build)
         return itemizer.solve(prebuilt)
+
     def itemize(self, to_build: input_list) -> Itemizer2:
         self.solve()
         to_build = _conv_input_list(to_build)
@@ -360,4 +385,3 @@ class RecipeDB:
         fake_recipe = RecipeBase([Quantified(1, fake_item)], to_build, TierSpec.ULV,
                                  0, NullStation, [])
         return Itemizer2(fake_recipe, self)
-

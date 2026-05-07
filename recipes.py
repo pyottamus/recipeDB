@@ -1,18 +1,20 @@
 from collections.abc import Sequence
 
+from .quantified import Quantified, QuantifiedDict
 from .quantified import SemiQuantifiedIterable, quantify_tuple
 from .recipeDB_parser_types import TierSpec
 from .recipeDB_types import *
-from .quantified import Quantified, QuantifiedDict
 
 __all__ = ["Recipe", "RecipeBase"]
+
 
 def unify(items):
     sum_items = QuantifiedDict()
     for item in items:
         sum_items.add(item)
-    
+
     return sum_items.to_tuple()
+
 
 class RecipeBase:
     products: tuple[Quantified[NamedItemBase], ...]
@@ -23,9 +25,11 @@ class RecipeBase:
     circuit: int
     dependencies: set[RecipeBase]
     solved: bool
+
     def clean(self):
         self.solved = False
         self.dependencies = set[RecipeBase]()
+
     def __repr__(self):
         if len(self.products) == 1:
             products = repr(self.products[0])
@@ -34,11 +38,12 @@ class RecipeBase:
 
         return f"<RecipeBase: {products}>"
 
-
     def __eq__(self, other: RecipeBase):
         return self.products == other.products and self.items == other.items and self.station == other.station and self.tools == other.tools and self.tier == other.tier
+
     def __hash__(self):
         return hash((type(self), self.products, self.items, self.station, self.tools, self.tier, self.station))
+
     def get_product_count(self, product):
         for item in self.products:
             if item.val == product:
@@ -84,16 +89,17 @@ class RecipeBase:
         items = quantify_tuple(items)
 
         station = station
-        self._init(products, items, tier,circuit, station, tools)
+        self._init(products, items, tier, circuit, station, tools)
 
     def is_main(self, product: Item):
         return self.products[0].val == product
+
     def __str__(self):
         o = ', '.join(map(str, self.products))
 
         if self.station != workbench:
             o += f' : {self.station.name}'
-         
+
         o += ' {\n'
 
         o += ''.join([f'\t{item}\n' for item in self.items])
@@ -103,16 +109,18 @@ class RecipeBase:
             o += ''.join([f'\t{item}\n' for item in self.tools])
         o += '}'
         return o
-    
+
     def _get_product(self, target):
         for product in self.products:
             if product.val is target:
                 return product
         return None
 
+
 class Recipe(RecipeBase):
     def __init__(self, products, items, tier: TierSpec, circuit: int, station=workbench, tools=None):
         super().__init__(products, items, tier, circuit, station, tools)
+
 
 """
 class MaterializedComponentRecipe(RecipeBase):

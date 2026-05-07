@@ -1,17 +1,20 @@
 import math
-from typing import Any, Sequence, Set
-from dataclasses import dataclass
-from .quantified import quantify_list, QuantifiedDict, Quantified
-from .recipeDB_types import *
-from .recipes import *
-from .recipeDB_parser_types import TierSpec
-from .recipeDB import *
-from multimethod import multimethod
-from .recipe_graph import *
 from collections import defaultdict
+from dataclasses import dataclass
+from typing import Any, Sequence, Set
+
+from multimethod import multimethod
+
+from .quantified import quantify_list, QuantifiedDict, Quantified
+from .recipeDB import *
+from .recipeDB_parser_types import TierSpec
+from .recipeDB_types import *
+from .recipe_graph import *
+from .recipes import *
 
 __all__ = ["RecipeSolver", "Solver", "ItemizerResult2", "ItemizerResult", "Itemizer2", "Itemizer"]
 type prebuilt_type = QuantifiedDict[NamedItemBase] | Sequence[Quantified[NamedItemBase] | NamedItemBase] | None
+
 
 def ceil_round(a, b):
     return ((a + b - 1) // b) * b
@@ -26,6 +29,7 @@ def digit_len(num: int):
     else:
         return math.floor(math.log10(num) + 1)
 
+
 def print_list(lst: Sequence[Any], sort=True, pre_tab=0, empty_text="*NONE*"):
     if len(lst) == 0:
         print(empty_text)
@@ -34,6 +38,7 @@ def print_list(lst: Sequence[Any], sort=True, pre_tab=0, empty_text="*NONE*"):
         lst = sorted(lst)
     for item in lst:
         print(f'{"\t" * pre_tab}{item}')
+
 
 def normal_print_tbl(item_table: QuantifiedDict[Item], sort=True, pre_tab=0, empty_text="*NONE*"):
     if len(item_table) == 0:
@@ -68,7 +73,8 @@ def normal_print_tbl(item_table: QuantifiedDict[Item], sort=True, pre_tab=0, emp
         print(f'{"\t" * pre_tab}{item:{pad}}{count:>{dpad}}')
 
 
-def print_double_wide_table(item_table: Sequence[tuple[NamedItemBase, int, int]], sort=True, pre_tab=0, empty_text="*NONE*"):
+def print_double_wide_table(item_table: Sequence[tuple[NamedItemBase, int, int]], sort=True, pre_tab=0,
+                            empty_text="*NONE*"):
     if len(item_table) == 0:
         print(empty_text)
         return
@@ -92,18 +98,25 @@ def print_double_wide_table(item_table: Sequence[tuple[NamedItemBase, int, int]]
     dpad = ceil_round(dpad, 4)
     for item, count_wanted, count_prebuilt in out:
         print(f'{"\t" * pre_tab}{item:{pad}}{count_wanted:>{dpad}}\t{count_prebuilt}')
+
+
 class OrderedSet[T]:
     __slots__ = "_set",
     _set: dict[T, None]
+
     def __init__(self):
         self._set = {}
+
     def insert(self, value: T):
         self._set[value] = None
+
     def __contains__(self, value: T):
         return value in self._set
+
     @property
     def set(self):
         return tuple(self._set.keys())
+
 
 class StationList(OrderedSet[CircuitedTieredStation]):
     @multimethod
@@ -113,17 +126,20 @@ class StationList(OrderedSet[CircuitedTieredStation]):
         self._set[circuited_tiered_station] = None
 
     @multimethod
-    def insert(self, station: Station, tier: TierSpec, circuit: int=0):
+    def insert(self, station: Station, tier: TierSpec, circuit: int = 0):
         circuited_tiered_station = CircuitedTieredStation(station, tier, circuit)
         self._set[circuited_tiered_station] = None
+
     @property
     def stations(self):
         return tuple(self._set.keys())
+
 
 class ToolList(OrderedSet[Tool]):
     @property
     def tools(self):
         return tuple(self._set.keys())
+
 
 @dataclass(slots=True, frozen=True)
 class ItemizerResult2:
@@ -133,6 +149,7 @@ class ItemizerResult2:
     prebuilt_out: QuantifiedDict[Item]
     stations: StationList
     tools: ToolList
+
     def pretty_print(self):
         print("UNITS")
         normal_print_tbl(self.unit_out)
@@ -140,8 +157,8 @@ class ItemizerResult2:
         normal_print_tbl(self.extra_out)
 
         print("\nPARTS")
-        #normal_print_tbl(self.produced)
-        #return
+        # normal_print_tbl(self.produced)
+        # return
         parts_print = [(k, v, self.prebuilt_out.get(k, 0)) for
                        k, v in self.produced.items()]
         print_double_wide_table(parts_print, sort=False)
@@ -149,6 +166,8 @@ class ItemizerResult2:
         print_list(self.stations.stations, sort=False)
         print("\nTOOLS")
         print_list(self.tools.tools, sort=False)
+
+
 @dataclass(slots=True, frozen=True)
 class ItemizerResult:
     unit_out: QuantifiedDict[Item]
@@ -166,6 +185,8 @@ class ItemizerResult:
         parts_print = [(k, v - self.prebuilt_out.get(k, 0) - self.extra_out.get(k, 0), self.prebuilt_out.get(k, 0)) for
                        k, v in (self.out + self.prebuilt_out).items()]
         print_double_wide_table(parts_print, sort=False)
+
+
 @dataclass(slots=True)
 class RecipeSolver:
     db: RecipeDB
@@ -176,13 +197,13 @@ class RecipeSolver:
     @property
     def root(self) -> RecipeBase:
         return self.fake_recipe
+
     def __init__(self, db: RecipeDB, items: Sequence[NamedItemBase] | set[NamedItemBase]):
         self.fake_item = Item()
         self.fake_recipe = Recipe([Quantified(1, self.fake_item)], items, TierSpec.ULV, 0, NullStation, [])
         self.graph = RecipeGraph(self.fake_recipe)
         self.db = db
         self._process()
-
 
     def _process(self):
         stack_set = {self.root}
@@ -212,12 +233,14 @@ class Itemizer2:
     root: RecipeBase
     db: RecipeDB
     graph: RecipeGraph
+
     def __init__(self, root: RecipeBase, db: RecipeDB):
         self.root = root
         self.db = db
         self.graph = RecipeGraph(root)
         self._process()
         self.topological_order = self.graph.topological_sort()[1:]
+
     def _process(self):
         stack = [(self.root, iter(self.root.items))]
         while stack:
@@ -246,7 +269,7 @@ class Itemizer2:
 
                 if primary not in self.graph.recipe_map:
                     self.graph.add_node(primary)
-                #print(f"adding weak edge {primary}->{recipe}")
+                # print(f"adding weak edge {primary}->{recipe}")
                 self.graph.add_edge(recipe, primary)
 
             stack.append((recipe, iter(recipe.items)))
@@ -258,7 +281,8 @@ class Itemizer2:
             prebuilt = prebuilt
         else:
             assert isinstance(prebuilt,
-                              (Sequence, Set)), f"Expected QuantifiedDict[NamedItemBase] or Sequence[Quantified[NamedItemBase] | NamedItemBase], got {type(prebuilt).__name__}"
+                              (Sequence,
+                               Set)), f"Expected QuantifiedDict[NamedItemBase] or Sequence[Quantified[NamedItemBase] | NamedItemBase], got {type(prebuilt).__name__}"
             prebuilt = QuantifiedDict[NamedItemBase].from_list(prebuilt)
 
         stations = StationList()
@@ -273,11 +297,11 @@ class Itemizer2:
             stations.insert(circuited_tiered_station)
             for tool in recipe.tools:
                 tools.insert(tool)
-            main_product : Quantified[NamedItemBase] = recipe.products[0]
+            main_product: Quantified[NamedItemBase] = recipe.products[0]
             needed_item = needed[main_product.val]
 
             count = ceil_round(needed_item, main_product.count)
-            mult =  count // main_product.count
+            mult = count // main_product.count
             if mult == 0:
                 continue
             for product in recipe.products:
@@ -290,9 +314,9 @@ class Itemizer2:
                 else:
                     extra[product.val] += mult * product.count
             for item in recipe.items:
-                item : Quantified[NamedItemBase] = item.copy()
+                item: Quantified[NamedItemBase] = item.copy()
                 item.count *= mult
-                #check if item already prebuilt and remove the prebuilt count from what needs to be built
+                # check if item already prebuilt and remove the prebuilt count from what needs to be built
                 if item.val in prebuilt:
                     prebuilt_count = prebuilt[item.val]
                     if prebuilt_count > item.count:
@@ -323,7 +347,6 @@ class Itemizer2:
                     item = item.copy()
                     item -= extra[item.val]
 
-
                 if self.db.is_unit(item):
                     # no primary recipe for item
                     units[item.val] += item.count
@@ -332,8 +355,6 @@ class Itemizer2:
                     needed += item
 
         return ItemizerResult2(units, extra, produced, prebuilt_out, stations, tools)
-
-
 
 
 class Itemizer:
@@ -461,7 +482,7 @@ class BaseSolverItem:
             else:
                 direct_deps[item] += count
 
-    def __init__(self, item: Item, db: RecipeDB, is_unit: bool, recipe: RecipeBase | None=None):
+    def __init__(self, item: Item, db: RecipeDB, is_unit: bool, recipe: RecipeBase | None = None):
         if is_unit:
             if recipe is not None:
                 raise ValueError("recipe must be None if is_unit")
@@ -493,13 +514,15 @@ class UnionSolverItem(BaseSolverItem):
     fake_item: Item
     fake_recipe: RecipeBase
     fake_sitem: SolverItem
+
     def __init__(self, items: Sequence[Quantified[NamedItemBase] | NamedItemBase] | set[
         Quantified[NamedItemBase] | NamedItemBase], db):
         if len(items) == 0:
             raise ValueError("UnionSolverItem must have at least 1 item")
 
         self.fake_item = Item()
-        self.fake_recipe = RecipeBase([Quantified(1, self.fake_item)], quantify_list(items), TierSpec.ULV, 0,NullStation, [])
+        self.fake_recipe = RecipeBase([Quantified(1, self.fake_item)], quantify_list(items), TierSpec.ULV, 0,
+                                      NullStation, [])
         self.fake_sitem = SolverItem(self.fake_item, db, False, self.fake_recipe)
         super().__init__(self.fake_item, db, False, self.fake_recipe)
 
@@ -507,7 +530,7 @@ class UnionSolverItem(BaseSolverItem):
 class SolverItem(BaseSolverItem):
     __slots__ = ()
 
-    def __init__(self, item: Item, db, is_unit: bool | None = None, recipe: RecipeBase | None=None):
+    def __init__(self, item: Item, db, is_unit: bool | None = None, recipe: RecipeBase | None = None):
         if is_unit:
             recipe = None
         elif recipe is None:
@@ -584,6 +607,7 @@ class Solver:
         result = self.sitem_calc(fake_sitem, prebuilt)
         del result.out[fake_sitem.item]
         return result
+
     def sitem_calc(self, sitem: BaseSolverItem, prebuilt: prebuilt_type = None) -> ItemizerResult:
         return Itemizer(1, sitem, self.item_map, prebuilt).calc()
 

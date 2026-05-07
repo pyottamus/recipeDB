@@ -4,6 +4,8 @@ from typing import NoReturn
 from .recipeDB_lexemes import *
 
 __all__ = ["Lexer"]
+
+
 class Lexer:
     def __init__(self, file: Path):
         self.file = file
@@ -13,13 +15,16 @@ class Lexer:
         self.linetab = [0]
         self.pos = 0
         self.data = None
+
     def __enter__(self):
         self.entered = True
         self.io = self.file.open("r", newline='')
         return self
+
     def newline(self):
         self.line += 1
         self.linetab.append(self.pos)
+
     def inc_linetab(self):
         while self.pos < len(self.data) and self.data[self.pos] != '\n':
             self.pos += 1
@@ -27,48 +32,56 @@ class Lexer:
             self.pos += 1
         self.line += 1
         self.linetab.append(self.pos)
+
     def increase_linetab(self, amount: int):
         for _ in range(amount):
             self.inc_linetab()
-            
+
         return amount
+
     def decrease_linetab(self, amount: int):
         for i in range(amount):
             del self.linetab[-1]
+
     def advance(self):
         pos = self.pos
-        
+
         if pos == len(self.data):
             return ""
         else:
             self.pos += 1
             return self.data[pos]
+
     def peek(self):
         pos = self.pos
         if pos == len(self.data):
             return ""
         else:
             return self.data[pos]
+
     def read_to_delim(self):
         """ Reads until first of SP, NL, ',', '>', '<', '{', '}', ';' or EOF """
         start = self.pos
-        
+
         while self.pos < len(self.data) and self.data[self.pos] not in DELIM_CHARS:
             self.pos += 1
         return self.data[start:self.pos]
+
     def read_to_sp(self):
         """ Reads until first space char or EOF"""
         start = self.pos
-        
+
         while self.pos < len(self.data) and self.data[self.pos] not in SPACE_CHARS:
             self.pos += 1
         return self.data[start:self.pos]
+
     def read_to_nl(self):
         """ Reads until first newline char or EOF"""
         start = self.pos
         while self.pos < len(self.data) and self.data[self.pos] != '\n':
             self.pos += 1
         return self.data[start:self.pos]
+
     def error(self, start_line: int, start_pos: int, msg: str) -> NoReturn:
         start_pos += 1
         end_line_inclusive = self.line
@@ -80,8 +93,10 @@ class Lexer:
             increased = 0
         line_end_pos = self.linetab[end_line_inclusive + 1 - 1]
         self.decrease_linetab(increased)
-        start_col = start_pos - line_start_pos 
-        raise RuntimeError(f"{msg}\n\tError Occurred on line {start_line}, offset {start_col}\nFull lines follows After line break\n{self.data[line_start_pos:line_end_pos]}")
+        start_col = start_pos - line_start_pos
+        raise RuntimeError(
+            f"{msg}\n\tError Occurred on line {start_line}, offset {start_col}\nFull lines follows After line break\n{self.data[line_start_pos:line_end_pos]}")
+
     def skip_sp_special(self):
         """ Skips whitespace. Takes care of line continuation ( "text \\\n moretext"). Returns True if end of prefix is found."""
         while self.pos < len(self.data):
@@ -109,7 +124,7 @@ class Lexer:
                     continue
                 else:
                     self.error(self.line, self.pos, f"Expected newline after '\\', got {c!r}")
-                
+
             else:
                 break
         if self.pos == len(self.data):
@@ -169,6 +184,7 @@ class Lexer:
 
         yield prefix
         yield from self.match_after_prefix()
+
     def get_fluid_suffix(self, num: str):
         prefix = ""
         suffix = ""
@@ -199,7 +215,6 @@ class Lexer:
 
         return FluidSpec(self.line, self.line, start, len(num), int(prefix), suffix)
 
-     
     def match_number_or_fluid_spec(self, c: str):
         start = self.pos - 1
         num = c
@@ -208,6 +223,7 @@ class Lexer:
             return Number(self.line, self.line, start, len(num), int(num))
         else:
             return self.fluid_spec_suffix_test(start, num)
+
     def match_multi_line_comment(self):
         start = self.pos - 1
         start_line = self.line
@@ -222,16 +238,19 @@ class Lexer:
 
         if self.pos >= len(self.data) - 1:
             self.error(self.line, start, "Unterminated multi-line comment")
-        assert self.data[self.pos:self.pos+2] == "*/", f"critical assertion error, expected '*/, {self.line} {self.pos}'"
+        assert self.data[
+                   self.pos:self.pos + 2] == "*/", f"critical assertion error, expected '*/, {self.line} {self.pos}'"
         text = self.data[text_start:self.pos]
         self.pos += 2
-        
+
         return MultiLineComment(start_line, self.line, start, len(text) + 4, text)
+
     def match_single_line_comment(self):
         start = self.pos - 1
         self.pos += 1
         text = self.read_to_nl()
         return SingleLineComment(self.line, self.line, start, len(text) + 2, text)
+
     def match_comment(self, c: str):
         start = self.pos - 1
         match self.peek():
@@ -243,6 +262,7 @@ class Lexer:
                 self.error(self.line, self.pos, f"Expected '*' or '/' to follow '/', got EOF")
             case _:
                 self.error(self.line, self.pos, f"Expected '*' or '/' to follow '/', got {self.peek()!r}")
+
     def match_material(self):
         start = self.pos
         c = self.data[self.pos]
@@ -258,6 +278,7 @@ class Lexer:
             self.error(self.line, self.pos, f"Expected terminating ']', got {self.data[self.pos]!r}")
         self.pos += 1
         return material
+
     def match_varname_or_materialized_varname(self, c: str):
         start = self.pos - 1
         while self.pos < len(self.data) and f'a{self.data[self.pos]}'.isidentifier():
@@ -266,20 +287,19 @@ class Lexer:
         if self.pos == len(self.data):
             return Varname(self.line, self.line, start, len(name), name)
 
-        
         if self.data[self.pos] != '[':
             return Varname(self.line, self.line, start, len(name), name)
         else:
             self.pos += 1
             material = self.match_material()
             return MaterializedVarname(self.line, self.line, start, len(name) + len(material) + 2, name, material)
+
     def match_dolarsign(self, c: str):
         start = self.pos - 1
         target = self.read_to_sp()
         orig = target
         target = target.lower()
         start_line = self.line
-
 
         match target:
             case "generic":
@@ -327,10 +347,12 @@ class Lexer:
                         yield self.match_varname_or_materialized_varname(c)
                     else:
                         self.error(self.line, self.pos - 1, f"Unexpected Token {c!r}")
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.io is not None:
             self.io.close()
             del self.data
+
 
 if __name__ == "__main__":
     file = Path(r"C:\Users\josep\Desktop\recipes.txt")
@@ -339,4 +361,3 @@ if __name__ == "__main__":
         lexemes = list(l.lex())
         for lexeme in lexemes:
             print(lexeme)
-

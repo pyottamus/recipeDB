@@ -1,14 +1,17 @@
-from .recipeDB import RecipeDB
 from pathlib import Path
-from .recipe_lexer import Lexer
-from .recipeDB_types import *
-from .recipeDB_parser_types import *
-from .recipeDB_lexemes import VarnameLike
-from .recipes import Recipe
-from .solver import Solver
 from typing import NoReturn, cast
 
+from .recipeDB import RecipeDB
+from .recipeDB_lexemes import VarnameLike
+from .recipeDB_parser_types import *
+from .recipeDB_types import *
+from .recipe_lexer import Lexer
+from .recipes import Recipe
+from .solver import Solver
+
 __all__ = ["Parser"]
+
+
 class CommentFilter:
     def __init__(self, tokstream):
         self.tokstream = iter(tokstream)
@@ -148,7 +151,7 @@ class Parser:
         end_line = token.end_line
         pos = token.pos
         built_in_type = self.built_in[token.name].__name__
-        #prev_decl = self.db.prev_decl[token.name]
+        # prev_decl = self.db.prev_decl[token.name]
         line_start_pos, line_end_pos = self.get_line_pos(start_line, end_line)
 
         col = pos - line_start_pos
@@ -272,6 +275,7 @@ class Parser:
         line3 = f"Full lines follows After line break"
         line4 = self.lexer.data[line_start_pos:line_end_pos]
         raise RuntimeError(f"{line1}\n{line2}\n{line3}\n{line4}\n")
+
     @staticmethod
     def err_lines(*lines: str | None) -> str:
         out = []
@@ -283,7 +287,8 @@ class Parser:
                 out.append('\n')
         return ''.join(out)
 
-    def undefined_symbol_error(self, item: QuantifiedValue | MaterializedVarname | Varname | SubstitutedVarname | SubstitutedMaterializedVarname) -> NoReturn:
+    def undefined_symbol_error(self,
+                               item: QuantifiedValue | MaterializedVarname | Varname | SubstitutedVarname | SubstitutedMaterializedVarname) -> NoReturn:
         if isinstance(item, QuantifiedValue):
             if isinstance(item.original_spec, ImpliedNumber):
                 original_spec = item.item
@@ -599,7 +604,8 @@ class Parser:
         return RecipeDeclaration(start, end, product_list, machine_spec.tier, machine_spec.name, machine_spec.circuit,
                                  items)
 
-    def comma_separated_list_ex[T: Lexeme](self, typ: type[T] | tuple[type[T], ...], fin: type[Lexeme]) -> tuple[list[T], Lexeme]:
+    def comma_separated_list_ex[T: Lexeme](self, typ: type[T] | tuple[type[T], ...], fin: type[Lexeme]) -> tuple[
+        list[T], Lexeme]:
 
         item = self.lexer.advance()
         if not isinstance(item, typ):
@@ -623,7 +629,8 @@ class Parser:
                 self.error(nxt, Comma)
             else:
                 continue
-        raise#unreachable
+        raise  # unreachable
+
     def varname_comma_separated_list(self):
         return self.comma_separated_list_ex(Varname, EOP)
 
@@ -648,7 +655,7 @@ class Parser:
         materials, end = self.varname_comma_separated_list()
         return MaterializeStar(spec, end, spec, components, materials)
 
-    def prefix(self) ->  NormalPrefixSpec | Materialized | MaterializeStar:
+    def prefix(self) -> NormalPrefixSpec | Materialized | MaterializeStar:
         spec: Prefix = cast(Prefix, self.lexer.advance())
         match spec.prefix:
             case PrefixType.fluid:
