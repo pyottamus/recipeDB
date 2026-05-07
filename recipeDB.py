@@ -4,7 +4,7 @@ from collections.abc import Sequence, Set
 
 from multimethod import multimethod
 
-from .quantified import QuantifiedDict, Quantified, quantify_tuple
+from .quantified import QuantifiedDict, quantify_tuple
 from .recipeDB_parser_types import *
 from .recipeDB_types import *
 from .recipes import *
@@ -21,6 +21,8 @@ type input_list = NamedItemBase | \
 
 def _conv_input_list(inp: input_list) -> tuple[Quantified[NamedItemBase], ...]:
     if isinstance(inp, NamedItemBase):
+        inp = [inp]
+    elif isinstance(inp, Quantified):
         inp = [inp]
 
     if isinstance(inp, (Sequence, Set)):
@@ -379,6 +381,7 @@ class RecipeDB:
 
     def itemize(self, to_build: input_list) -> Itemizer2:
         self.solve()
+
         to_build = _conv_input_list(to_build)
 
         fake_item = Item()
