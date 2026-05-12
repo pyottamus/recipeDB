@@ -349,12 +349,3 @@ class Lexer:
         if self.io is not None:
             self.io.close()
             del self.data
-
-
-if __name__ == "__main__":
-    file = Path(r"C:\Users\josep\Desktop\recipes.txt")
-    l = Lexer(file)
-    with l:
-        lexemes = list(l.lex())
-        for lexeme in lexemes:
-            print(lexeme)
