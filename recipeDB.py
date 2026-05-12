@@ -10,8 +10,8 @@ from .recipeDB_types import *
 from .recipes import *
 from .solver import RecipeSolver, Itemizer2
 
-__all__ = ["RecipeDB"]
-
+__all__ = ["RecipeDB", "prev_decl_type"]
+type prev_decl_type = MaterializeStarItem | Varname | MaterializedVarname | Implicit
 type input_list = NamedItemBase | \
                   Quantified[NamedItemBase] | \
                   Sequence[NamedItemBase | Quantified[NamedItemBase]] | \
@@ -47,7 +47,7 @@ class RecipeDB:
     stations: dict[str, Station]
     recipes: defaultdict[Item, list[Recipe]]
     fluids: dict[str, FluidBase]
-
+    prev_decl: dict[str, prev_decl_type]
     typ_index = {Tool: 0,
                  Station: 1,
                  NamedItem: 2,
@@ -173,7 +173,23 @@ class RecipeDB:
 
         return self.stations.get(key)
 
-    def add_fluid(self, name: Varname):
+    def add_materialized_fluid2(self, material: Material, prev_decl: prev_decl_type) -> MaterializedFluid:
+        val = MaterializedFluid(material)
+        self._sym_table[val.qname] = val
+        self.fluids[val.qname] = val
+        self.prev_decl[val.qname] = prev_decl
+        self.clean = False
+        return val
+
+    def add_named_fluid2(self, name: str, prev_decl: prev_decl_type) -> NamedFluid:
+        val = NamedFluid(name)
+        self._sym_table[name] = val
+        self.fluids[name] = val
+        self.prev_decl[name] = prev_decl
+        self.clean = False
+        return val
+
+    def add_prefix_fluid(self, name: Varname):
 
         if (sym := self.get_sym(name.name)) is not None:
 
@@ -191,6 +207,7 @@ class RecipeDB:
         self._sym_table[val.qname] = val
         self.fluids[val.qname] = val
         self.prev_decl[val.qname] = name
+        self.clean = False
 
     def resovle_type[T](self, name: str, expected_type: type[T]) -> T:
         x = self.get_sym(name)
@@ -297,54 +314,80 @@ class RecipeDB:
                 continue
             locals[name] = symbol
 
-    def add_material(self, varname: Varname):
-        val = Material(varname.name)
+    def add_material2(self, name: str, prev_decl: prev_decl_type) -> Material:
+        val = Material(name)
         self.add_sym(val)
-        self.prev_decl[varname.name] = varname
+        self.prev_decl[name] = prev_decl
+        self.clean = False
+        return val
+
+    def add_material(self, varname: Varname):
+        return self.add_material2(varname.name, varname)
+
+    def add_materialized_component2(self, component: Component, material: Material,
+                                    prev_decl: prev_decl_type) -> MaterializedComponent:
+        val = MaterializedComponent(component, material)
+        self.add_sym(val)
+        self.prev_decl[val.qname] = prev_decl
+        self.clean = False
+        return val
 
     @multimethod
     def add_materialized_component(self, materialized_varname: MaterializedVarname, component: Component,
-                                   material: Material):
-        val = MaterializedComponent(component, material)
-        self.add_sym(val)
-        self.prev_decl[f'{materialized_varname.name}[{materialized_varname.material}]'] = materialized_varname
+                                   material: Material) -> MaterializedComponent:
+        return self.add_materialized_component2(component, material, materialized_varname)
 
     @multimethod
-    def add_materialized_component(self, materialized_varname: MaterializedVarname):
+    def add_materialized_component(self, materialized_varname: MaterializedVarname) -> MaterializedComponent:
         component = self.resolve_component(materialized_varname.name)
         material = self.resolve_material(materialized_varname.material)
 
-        self.add_materialized_component(materialized_varname, component, material)
+        return self.add_materialized_component(materialized_varname, component, material)
 
-    def add_materialized_star_item(self, component: Component, material: Material, item: MaterializeStarItem):
+    def add_materialized_star_item(self, component: Component, material: Material,
+                                   item: MaterializeStarItem) -> MaterializedComponent:
         val = MaterializedComponent(component, material)
         self.add_sym(val)
         self.prev_decl[item.qname] = item
         self.clean = False
+        return val
 
-    def add_named_item(self, varname: Varname):
-        val = NamedItem(varname.name)
+    def add_named_item2(self, name: str, prev_decl: prev_decl_type) -> NamedItem:
+        val = NamedItem(name)
         self.add_sym(val)
-        self.prev_decl[varname.name] = varname
+        self.prev_decl[name] = prev_decl
         self.clean = False
+        return val
 
-    def add_tool(self, varname: Varname):
+    def add_named_item(self, varname: Varname) -> NamedItem:
+        return self.add_named_item2(varname.name, varname)
+
+    def add_tool(self, varname: Varname) -> Tool:
         val = Tool(varname.name)
         self.add_sym(val)
         self.prev_decl[varname.name] = varname
         self.clean = False
+        return val
 
-    def add_station(self, varname: Varname):
-        val = Station(varname.name)
+    def add_station2(self, name: str, prev_decl: prev_decl_type) -> Station:
+        val = Station(name)
         self.add_sym(val)
-        self.prev_decl[varname.name] = varname
+        self.prev_decl[name] = prev_decl
         self.clean = False
+        return val
 
-    def add_component(self, varname: Varname):
-        val = Component(varname.name)
+    def add_station(self, varname: Varname) -> Station:
+        return self.add_station2(varname.name, varname)
+
+    def add_component2(self, name: str, prev_decl: prev_decl_type) -> Component:
+        val = Component(name)
         self.add_sym(val)
-        self.prev_decl[varname.name] = varname
+        self.prev_decl[name] = prev_decl
         self.clean = False
+        return val
+
+    def add_component(self, varname: Varname) -> Component:
+        return self.add_component2(varname.name, varname)
 
     def _clean(self):
         for recipe_list in self.recipes.values():

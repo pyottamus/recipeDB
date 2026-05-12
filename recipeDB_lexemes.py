@@ -4,7 +4,7 @@ __all__ = ["Lexeme", "Colon", "SemiColon", "LT", "GT", "LCurly", "RCurly", "LPar
            "GenericDecl", "Generic", "Comment", "SingleLineComment", "MultiLineComment", "Prefix", "PrefixType",
            "MaterializeStarPrefix", "MaterializePrefix", "StationPrefix", "ComponentPrefix", "MaterialPrefix",
            "FluidPrefix", "ToolPrefix", "NamedPrefix", "EOP", "Number", "FluidSuffix", "FluidSpec", "VarnameLike",
-           "Varname", "MaterializedVarname", "EOF", "SPACE_CHARS", "DELIM_CHARS"]
+           "Varname", "MaterializedVarname", "EOF", "SPACE_CHARS", "DELIM_CHARS", "FakeLexeme", "FakeLexemeType"]
 
 
 class Lexeme:
@@ -18,6 +18,23 @@ class Lexeme:
 
     def __repr__(self):
         return f'{type(self).__name__}()'
+
+
+class FakeLexemeType(Lexeme):
+    _instance = None
+    __slots__ = ()
+
+    def __init__(self):
+        super().__init__(-1, -1, -1, -1)
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance.__init__()
+        return cls._instance
+
+
+FakeLexeme = FakeLexemeType()
 
 
 class Colon(Lexeme):

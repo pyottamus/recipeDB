@@ -216,7 +216,7 @@ workbench = Station('workbench')
 hand = Station("hand")
 NullStation = Station.NullStationInit()
 
-type Symbol = Tool | Station | Component | MaterializedComponent | NamedItem | MaterializedFluid | NamedFluid
+type Symbol = Tool | Station | Component | Material | MaterializedComponent | NamedItem | MaterializedFluid | NamedFluid
 
 
 class NotAMaterializedFluidError(ValueError):

@@ -202,13 +202,10 @@ class Lexer:
             self.error(self.line, start, f"Expected FluidSuffix, got {suffix!r}")
         match suffix:
             case "L":
-                take = 1
                 suffix = FluidSuffix.L
             case "B":
-                take = 1
                 suffix = FluidSuffix.L
             case "mB":
-                take = 2
                 suffix = FluidSuffix.mB
             case _:
                 self.error(self.line, start, f"Expected FluidSuffix, got {suffix!r}")

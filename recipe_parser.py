@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from typing import NoReturn, cast
 
@@ -97,14 +98,16 @@ class LA:
 
 
 class Parser:
-    built_in = {"workbench": Station, fluid: Component}
+    built_in = {"workbench": Station, "fluid": Component}
 
-    def __init__(self, file: Path, print_recipes: bool = False):
+    def __init__(self, file: Path, print_recipes: bool = False, *, allow_implicit=False, warn_implicit=True):
         self.file = file
         self.lexer = LA(Lexer(file))
         self.db = RecipeDB()
         self.solver = None
         self.print_recipes = print_recipes
+        self.allow_implicit = allow_implicit
+        self.warn_implicit = warn_implicit
 
     def __enter__(self):
         self.lexer.__enter__()
@@ -192,20 +195,56 @@ class Parser:
         col = pos - line_start_pos
 
         prev_decl = self.db.prev_decl[item.qname]
+        if isinstance(prev_decl, Implicit):
+            implicit = True
+            prev_decl = prev_decl.val
+        else:
+            implicit = False
+
         prev_start_line = prev_decl.start_line
         prev_end_line = prev_decl.end_line
         prev_pos = prev_decl.pos
         prev_start_pos, prev_end_pos = self.get_line_pos(prev_start_line, prev_end_line)
         prev_col = prev_pos - prev_start_pos
         line1 = f"Redeclaration of MaterializedComponent, line {token_line}, offset {col}"
+
+        implicit_str = "implicit " if implicit else ""
         line2 = f"Previous declaration on line {prev_start_line}, offset {prev_col}"
         line3 = f"Full lines follows After line break"
         line4 = self.lexer.data[line_start_pos:line_end_pos]
-        line5 = f"Previous declaration occurred on line {prev_start_line}, offset {prev_col}"
+        line5 = f"Previous {implicit_str}declaration occurred on line {prev_start_line}, offset {prev_col}"
         line6 = f"Full lines follows After line break"
         line7 = self.lexer.data[prev_start_pos:prev_end_pos]
 
         raise RuntimeError(f"{line1}\n{line2}\n{line3}\n{line4}\n{line5}\n{line6}\n{line7}\n")
+
+    def redeclaration_prev_decl_helper(self, token: Varname, realized_type: type | str) -> tuple[str, str]:
+        if isinstance(realized_type, type):
+            realized_type = realized_type.__name__
+
+        prev_decl = self.db.prev_decl[token.name]
+        if isinstance(prev_decl, Implicit):
+            prev_decl = prev_decl.val
+            implicit = True
+        else:
+            implicit = False
+        prev_start_line = prev_decl.start_line
+        prev_end_line = prev_decl.end_line
+        prev_pos = prev_decl.pos
+        prev_start_pos, prev_end_pos = self.get_line_pos(prev_start_line, prev_end_line)
+        prev_col = prev_pos - prev_start_pos
+        prev_type = self.db.get_sym(token.name).__class__.__name__
+
+        line1 = f"Redeclaration of token of type {prev_type} redeclared as type {realized_type}"
+        if implicit:
+            line5 = f"Previous implicit declaration occurred on line {prev_start_line}, offset {prev_col}"
+        else:
+            line5 = f"Previous declaration occurred on line {prev_start_line}, offset {prev_col}"
+        line6 = f"Full lines follows After line break"
+        line7 = self.lexer.data[prev_start_pos:prev_end_pos]
+
+        line567 = f"{line5}\n{line6}\n{line7}"
+        return line1, line567
 
     def redeclaration(self, token: VarnameLike, typ: str) -> NoReturn:
         if token.name in self.built_in:
@@ -214,58 +253,17 @@ class Parser:
         start_line = token.start_line
         end_line = token.end_line
         pos = token.pos
+        line1, line567 = self.redeclaration_prev_decl_helper(token, typ)
 
-        prev_decl = self.db.prev_decl[token.qname]
-        prev_start_line = prev_decl.start_line
-        prev_end_line = prev_decl.end_line
-        prev_pos = prev_decl.pos
-        prev_start_pos, prev_end_pos = self.get_line_pos(prev_start_line, prev_end_line)
         line_start_pos, line_end_pos = self.get_line_pos(start_line, end_line)
 
         col = pos - line_start_pos
-        prev_col = prev_pos - prev_start_pos
-        prev_type = self.db.get_sym(token.qname).__class__.__name__
 
-        line1 = f"Redeclaration of token of type {prev_type} redeclared as type {typ}"
         line2 = f"Redeclaration occurred on line {start_line}, offset {col}"
         line3 = f"Full lines follows After line break"
         line4 = self.lexer.data[line_start_pos:line_end_pos]
-        line5 = f"Previous declaration occurred on line {prev_start_line}, offset {prev_col}"
-        line6 = f"Full lines follows After line break"
-        line7 = self.lexer.data[prev_start_pos:prev_end_pos]
-        raise RuntimeError(f"{line1}\n{line2}\n{line3}\n{line4}\n{line5}\n{line6}\n{line7}\n")
 
-    def redeclaration_fluid(self, token: Varname, error: ValueError) -> NoReturn:
-        realized = error.args[1]
-        start_line = token.start_line
-        end_line = token.end_line
-        pos = token.pos
-        line_start_pos, line_end_pos = self.get_line_pos(start_line, end_line)
-        col = pos - line_start_pos
-        if token.name in self.built_in:
-            line1 = f"Redeclaration of built-in token {realized.qname}"
-            line2 = f"Redeclaration occurred on line {start_line}, offset {col}"
-            line3 = f"Full lines follows After line break"
-            line4 = self.lexer.data[line_start_pos:line_end_pos]
-
-            raise RuntimeError(f"{line1}\n{line2}\n{line3}\n{line4}\n")
-
-        prev_decl = self.db.prev_decl[realized.qname]
-        prev_start_line = prev_decl.start_line
-        prev_end_line = prev_decl.end_line
-        prev_pos = prev_decl.pos
-        prev_start_pos, prev_end_pos = self.get_line_pos(prev_start_line, prev_end_line)
-        prev_col = prev_pos - prev_start_pos
-        prev_type = self.db.get_sym(token.name).__class__.__name__
-
-        line1 = f"Redeclaration of token {realized.qname}"
-        line2 = f"Redeclaration occurred on line {start_line}, offset {col}"
-        line3 = f"Full lines follows After line break"
-        line4 = self.lexer.data[line_start_pos:line_end_pos]
-        line5 = f"Previous declaration occurred on line {prev_start_line}, offset {prev_col}"
-        line6 = f"Full lines follows After line break"
-        line7 = self.lexer.data[prev_start_pos:prev_end_pos]
-        raise RuntimeError(f"{line1}\n{line2}\n{line3}\n{line4}\n{line5}\n{line6}\n{line7}\n")
+        raise RuntimeError(f"{line1}\n{line2}\n{line3}\n{line4}\n{line567}")
 
     def quantified_toolname_error(self, tool: QuantifiedValue) -> NoReturn:
         line_start_pos, line_end_pos = self.get_line_pos(tool.original_spec.start_line, tool.item.end_line)
@@ -323,6 +321,29 @@ class Parser:
         line5 = self.lexer.data[line_start_pos:line_end_pos]
         raise RuntimeError(self.err_lines(line1, line2, line3, line4, line5))
 
+    def redeclaration_fluid(self, token: Varname, error: ValueError) -> NoReturn:
+        realized = error.args[1]
+        start_line = token.start_line
+        end_line = token.end_line
+        pos = token.pos
+        line_start_pos, line_end_pos = self.get_line_pos(start_line, end_line)
+        col = pos - line_start_pos
+        if token.name in self.built_in:
+            line1 = f"Redeclaration of built-in token {realized.qname}"
+            line2 = f"Redeclaration occurred on line {start_line}, offset {col}"
+            line3 = f"Full lines follows After line break"
+            line4 = self.lexer.data[line_start_pos:line_end_pos]
+
+            raise RuntimeError(f"{line1}\n{line2}\n{line3}\n{line4}\n")
+
+        line1, line567 = self.redeclaration_prev_decl_helper(token, type(realized))
+
+        line2 = f"Redeclaration occurred on line {start_line}, offset {col}"
+        line3 = f"Full lines follows After line break"
+        line4 = self.lexer.data[line_start_pos:line_end_pos]
+
+        raise RuntimeError(f"{line1}\n{line2}\n{line3}\n{line4}\n{line567}")
+
     def redeclaration_fluid2(self, token: Varname, error: TypeError) -> NoReturn:
         realized = error.args[1]
         start_line = token.start_line
@@ -338,22 +359,11 @@ class Parser:
 
             raise RuntimeError(f"{line1}\n{line2}\n{line3}\n{line4}\n")
 
-        prev_decl = self.db.prev_decl[token.name]
-        prev_start_line = prev_decl.start_line
-        prev_end_line = prev_decl.end_line
-        prev_pos = prev_decl.pos
-        prev_start_pos, prev_end_pos = self.get_line_pos(prev_start_line, prev_end_line)
-        prev_col = prev_pos - prev_start_pos
-        prev_type = self.db.get_sym(token.name).__class__.__name__
-
-        line1 = f"Redeclaration of token of type {prev_type} redeclared as type {realized.__class__.__name__}"
+        line1, line567 = self.redeclaration_prev_decl_helper(token, type(realized))
         line2 = f"Redeclaration occurred on line {start_line}, offset {col}"
         line3 = f"Full lines follows After line break"
         line4 = self.lexer.data[line_start_pos:line_end_pos]
-        line5 = f"Previous declaration occurred on line {prev_start_line}, offset {prev_col}"
-        line6 = f"Full lines follows After line break"
-        line7 = self.lexer.data[prev_start_pos:prev_end_pos]
-        raise RuntimeError(f"{line1}\n{line2}\n{line3}\n{line4}\n{line5}\n{line6}\n{line7}\n")
+        raise RuntimeError(f"{line1}\n{line2}\n{line3}\n{line4}\n{line567}")
 
     def error(self, got, *expected) -> NoReturn:
         if len(expected) == 1:
@@ -466,17 +476,19 @@ class Parser:
         if not isinstance(nxt, Colon):
             raise RuntimeError("Fatal Logic Error")
         nxt = self.lexer.advance()
-        if isinstance(nxt, Varname) and nxt.name in TierSpec.__members__:
+        if isinstance(nxt, Varname):
+            if nxt.name not in TierSpec.__members__:
+                raise RuntimeError
+                # TODO error
             tier = TierSpec.__members__[nxt.name]
             nxt = self.lexer.advance()
-
         else:
             tier = TierSpec.ULV
 
         if not isinstance(nxt, Varname):
             self.error(nxt, Varname)
 
-        tool_name = nxt.name
+        machine = nxt
         end = nxt
         nxt = self.lexer.peek()
 
@@ -484,10 +496,10 @@ class Parser:
             circuit_decl_start = nxt
             self.lexer.advance()
             circuit, circuit_decl_end = self.circuit_decl()
-            return MachineSpec(start, circuit_decl_end, tier, tool_name, circuit)
+            return MachineSpec(start, circuit_decl_end, tier, machine, circuit)
 
         else:
-            return MachineSpec(start, end, tier, tool_name, 0)
+            return MachineSpec(start, end, tier, machine, 0)
 
     def item_list(self) -> list[QuantifiedItem | QuantifiedFluid]:
         item_list = []
@@ -542,11 +554,145 @@ class Parser:
 
         return product_list, start, end
 
+    def resolve_implicit_quantified_item_product(self, product: QuantifiedItem) -> Quantified:
+        # check if varname or MaterializedVarname
+        if isinstance(product.item, Varname):
+            # we know there is no symbol for this. add one
+            if self.warn_implicit:
+                sys.stderr.write(f"NamedItem {product.item.qname!r} was implicitly created\n")
+            return Quantified(product.quantity, self.db.add_named_item2(product.item.qname, Implicit(product.item)))
+        else:  # MaterializedVarname
+            # check if component exists
+            component = self.db.get_sym(product.item.component)
+            if component is None:
+                # add component
+                if self.warn_implicit:
+                    sys.stderr.write(f"Component {product.item.component!r} was implicitly created\n")
+                component = self.db.add_component2(product.item.component, Implicit(product.item))
+            elif not isinstance(component, Component):
+                raise SymbolTypeError(f"Invalid type for quantified item component {type(component).__name__!r}",
+                                      Component, type(component))
+            # check if material exists
+            material = self.db.get_sym(product.item.material)
+            if material is None:
+                # add material
+                if self.warn_implicit:
+                    sys.stderr.write(f"Material {product.item.material!r} was implicitly created\n")
+                material = self.db.add_material2(product.item.material, Implicit(product.item))
+            elif not isinstance(material, Material):
+                raise SymbolTypeError(f"Invalid type for quantified item material {type(material).__name__!r}",
+                                      Material, type(material))
+            # we already know there is no symbol for component[material]. add one
+            materialized_component = self.db.add_materialized_component2(component, material, Implicit(product.item))
+            if self.warn_implicit:
+                sys.stderr.write(f"MaterializedComponent {materialized_component.qname!r} was implicitly created\n")
+
+            return Quantified(product.quantity, materialized_component)
+
+    def resolve_implicit_quantified_fluid_product(self, product: QuantifiedFluid) -> Quantified:
+        if isinstance(product.item, Varname):
+            # we know there is no symbol for this. add one
+            # it must be a NamedFluid
+            if self.warn_implicit:
+                sys.stderr.write(f"NamedFluid {product.item.qname!r} was implicitly created\n")
+            named_fluid = self.db.add_named_fluid2(product.item.qname, Implicit(product.item))
+            return Quantified(product.quantity, named_fluid)
+        else:  # product.item is a MaterializedVarname
+            # we've already checked and product.item.component == "fluid"
+            # check if material exists
+            material = self.db.get_sym(product.item.material)
+            if material is None:
+                # add material
+                if self.warn_implicit:
+                    sys.stderr.write(f"Material {product.item.material!r} was implicitly created\n")
+                material = self.db.add_material2(product.item.material, Implicit(product.item))
+            elif not isinstance(material, Material):
+                raise SymbolTypeError(f"Invalid type for quantified fluid material {type(material).__name__!r}",
+                                      Material, type(material))
+
+            materialized_fluid = self.db.add_materialized_fluid2(material, Implicit(product.item))
+            if self.warn_implicit:
+                sys.stderr.write(f"MaterializedFluid {materialized_fluid.qname!r} was implicitly created\n")
+            return Quantified(product.quantity, materialized_fluid)
+
+    def resolve_product(self, product: QuantifiedValue) -> Quantified:
+        resolved = self.resolve_item(product)
+        if isinstance(resolved, Tool):
+            raise SymbolTypeError(f"Invalid type for quantified item product {type(resolved).__name__!r}",
+                                  NamedItem | MaterializedVarname, type(resolved))
+        else:
+            return resolved
+
+    def resolve_item(self, item: QuantifiedValue) -> Quantified | Tool:
+        if item.generic:
+            raise NotImplementedError
+
+        sym = self.db.get_sym(item.item.qname)
+
+        if isinstance(item, QuantifiedItem):
+            if sym is None:
+                if not self.allow_implicit:
+                    raise UndefinedSymbolError(f"Undefined item {item.item.name!r}", item.item.qname)
+                else:
+                    return self.resolve_implicit_quantified_item_product(item)
+            if isinstance(sym, Tool):
+                if not isinstance(item.original_spec, ImpliedNumber):
+                    raise QuantifiedToolError("Cannot define a tool with quantity", item.item.qname)
+                return sym
+            if isinstance(sym, (NamedItem, MaterializedComponent)):
+                if sym.fluid:
+                    # TODO Propper error here
+                    raise RuntimeError
+                return Quantified(item.quantity, sym)
+            else:
+                raise SymbolTypeError(f"Invalid type for quantified item {type(sym).__name__!r}",
+                                      NamedItem | Tool | MaterializedVarname, type(sym))
+        else:  # QuantifiedFluid
+            assert isinstance(item, QuantifiedFluid), "Core Logic error"
+            if isinstance(item.item, Varname):
+                if sym is None:
+                    if not self.allow_implicit:
+                        raise UndefinedSymbolError(f"Undefined fluid {item.item.name!r}", item.item.name)
+                    else:
+                        return self.resolve_implicit_quantified_fluid_product(item)
+                elif not sym.fluid:
+                    raise NotAFluidError(
+                        f"Cannot convert non-fluid {sym.qname!r} defined as type {type(sym).__name__} into a fluid",
+                        item,
+                        sym)
+                return Quantified(item.quantity, sym)
+            else:
+                if item.item.name != 'fluid':
+                    raise NotAMaterializedFluidError(f"Cannot convert non-fluid {item.item.qname!r} into a fluid", item)
+                if sym is None:
+                    if not self.allow_implicit:
+                        raise UndefinedSymbolError(f"Undefined fluid {item.item.name!r}", item.item.qname)
+                    else:
+                        return self.resolve_implicit_quantified_fluid_product(item)
+                elif not isinstance(sym, MaterializedFluid):
+                    raise NotAFluidError(f"Cannot convert non-fluid {item.item.qname!r} into a fluid", item, sym)
+                return Quantified(item.quantity, sym)
+
+    def resolve_station(self, recipe: RecipeDeclaration | SubstitutedRecipeDeclaration):
+        sym = self.db.get_sym(recipe.machine)
+        if sym is None:
+            if self.allow_implicit:
+                sys.stderr.write(f"Station {recipe.machine!r} was implicitly created\n")
+                return self.db.add_station2(recipe.machine, Implicit(recipe))
+            else:
+                raise UndefinedSymbolError(f"Undefined symbol {recipe.machine}", recipe.machine)
+        elif isinstance(sym, Station):
+            return sym
+        else:
+            raise SymbolTypeError(f"Symbol {recipe.machine} is not a {Station.__name__}, but a {type(sym).__name__}",
+                                  Station,
+                                  type(sym))
+
     def add_recipe(self, recipe: RecipeDeclaration | SubstitutedRecipeDeclaration):
         products = []
         for product in recipe.product_list:
             try:
-                resolved = product.resolve(self.db)
+                resolved = self.resolve_product(product)
             except UndefinedSymbolError:
                 self.undefined_symbol_error(product)
             except SymbolTypeError as e:
@@ -559,7 +705,7 @@ class Parser:
         tools = []
         for item in recipe.items:
             try:
-                resolved = item.resolve(self.db)
+                resolved = self.resolve_item(item)
             except QuantifiedToolError:
                 self.quantified_toolname_error(item)
             except UndefinedSymbolError:
@@ -581,7 +727,8 @@ class Parser:
                 for tool in tools:
                     print(f"\t{tool}")
 
-        station = self.db.resolve_station(recipe.machine)
+        station = self.resolve_station(recipe)
+
         real_recipe = Recipe(products, items, recipe.tier, recipe.circuit, station, tools)
         self.db.add_recipe(real_recipe)
 
@@ -663,10 +810,10 @@ class Parser:
                 ret = Fluids(spec, end, spec, lst)
                 for fluid in ret.items:
                     try:
-                        self.db.add_fluid(fluid)
-                    except ValueError as e:
+                        self.db.add_prefix_fluid(fluid)
+                    except RedeclarationError as e:
                         self.redeclaration_fluid(fluid, e)
-                    except TypeError as e:
+                    except SymbolTypeError as e:
                         self.redeclaration_fluid2(fluid, e)
             case PrefixType.station:
                 lst, end = self.varname_comma_separated_list()
@@ -674,7 +821,7 @@ class Parser:
                 for station in ret.items:
                     try:
                         self.db.add_station(station)
-                    except ValueError:
+                    except RedeclarationError:
                         self.redeclaration(station, "Station")
             case PrefixType.component:
                 lst, end = self.varname_comma_separated_list()
@@ -682,7 +829,7 @@ class Parser:
                 for component in ret.items:
                     try:
                         self.db.add_component(component)
-                    except ValueError:
+                    except RedeclarationError:
                         self.redeclaration(component, "Component")
             case PrefixType.tool:
                 lst, end = self.varname_comma_separated_list()
@@ -690,7 +837,7 @@ class Parser:
                 for tool in ret.items:
                     try:
                         self.db.add_tool(tool)
-                    except ValueError:
+                    except RedeclarationError:
                         self.redeclaration(tool, "Tool")
 
             case PrefixType.named:
@@ -699,7 +846,7 @@ class Parser:
                 for named in ret.items:
                     try:
                         self.db.add_named_item(named)
-                    except ValueError:
+                    except RedeclarationError:
                         self.redeclaration(named, "NamedItem")
             case PrefixType.material:
                 lst, end = self.varname_comma_separated_list()
@@ -708,7 +855,7 @@ class Parser:
                 for material in ret.items:
                     try:
                         self.db.add_material(material)
-                    except ValueError:
+                    except RedeclarationError:
                         self.redeclaration(material, "Material")
             case PrefixType.materialize:
                 lst, end = self.materialized_varname_comma_separated_list()
@@ -735,6 +882,7 @@ class Parser:
                     except UndefinedSymbolError as e:
                         self.undeclared_error(component, "Component")
                     except SymbolTypeError as e:
+                        # TODO make propper error
                         raise e
 
                     for material in ret.materials:
@@ -791,6 +939,7 @@ class Parser:
             self.error(lt, LT)
 
         generic_list, end = self.comma_separated_list_ex((MaterializedVarname, Varname), GT)
+        generic_list = cast(tuple[MaterializedVarname | Varname, ...], generic_list)
 
         recipe = self.recipe_decl()
 
@@ -814,9 +963,9 @@ class Parser:
                     recipe.items[i].item = GenericComponentMaterializedVarname(item.item, item.item.material)
             else:
                 if item.item.name == generic_t.name:
-                    recipe.items[i].item = Quantified(item.item.quantity, GenericItem(item.item.item))
-        ret = GenericRecipeDeclaration(generic, recipe.end, generic_list, recipe.product_list, recipe.tier,
-                                       recipe.machine, recipe.circuit, recipe.items, generic_t)
+                    recipe.items[i].item = GenericItem(item.item.item)
+        ret = GenericRecipeDeclaration(generic, recipe.end, generic_list, tuple(recipe.product_list), recipe.tier,
+                                       recipe.machine, recipe.circuit, tuple(recipe.items), generic_t)
         self.add_generic_recipe(ret)
         return ret
 
@@ -843,4 +992,5 @@ class Parser:
             else:
                 expressions.append(self.expression())
         self.solver = Solver(self.db.get_items(), self.db)
+        sys.stderr.flush()
         return expressions

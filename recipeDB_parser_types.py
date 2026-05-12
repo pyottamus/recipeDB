@@ -23,7 +23,8 @@ __all__ = ['Colon', 'Comma', 'Comment', 'Component', 'ComponentPrefix', 'Compone
            'ResolvedGenericRecipeDeclaration', 'ResolvedMaterializedVarname', 'ResolvedVarname', 'SemiColon',
            'SingleLineComment', 'StationPrefix', 'Stations', 'SubstitutedMaterializedVarname',
            'SubstitutedRecipeDeclaration', 'SubstitutedVarname', 'SymbolTypeError', 'TierSpec', 'Tool', 'ToolPrefix',
-           'Tools', 'UndefinedSymbolError', 'Varname', 'ImpliedNumberSingleton', 'quantified_value', 'Workbench_spec']
+           'Tools', 'UndefinedSymbolError', 'Varname', 'ImpliedNumberSingleton', 'quantified_value', 'Workbench_spec',
+           'Implicit']
 
 
 @dataclass(slots=True)
@@ -259,11 +260,11 @@ class RecipeDeclaration(Parsed):
 @dataclass(slots=True)
 class SubstitutedRecipeDeclaration:
     original: GenericRecipeDeclaration
-    product_list: list[QuantifiedValue]
+    product_list: tuple[QuantifiedValue, ...]
     tier: TierSpec
     machine: str
     circuit: int
-    items: list[QuantifiedValue]
+    items: tuple[QuantifiedValue, ...]
 
     @property
     def start(self):
@@ -279,17 +280,17 @@ class SubstitutedRecipeDeclaration:
 
 @dataclass(slots=True)
 class GenericRecipeDeclaration(Parsed):
-    generic_list: list[Varname]
-    product_list: list[QuantifiedValue]
+    generic_list: tuple[Varname | MaterializedVarname, ...]
+    product_list: tuple[QuantifiedValue, ...]
     tier: TierSpec
     machine: str
     circuit: int
-    items: list[QuantifiedValue]
+    items: tuple[QuantifiedValue, ...]
     generic_name: Varname
 
     def substitute(self, item: Varname | MaterializedVarname) -> SubstitutedRecipeDeclaration:
-        products = [product.substitute(item) for product in self.product_list]
-        items = [recipe_item.substitute(item) for recipe_item in self.items]
+        products = tuple([product.substitute(item) for product in self.product_list])
+        items = tuple([recipe_item.substitute(item) for recipe_item in self.items])
         return SubstitutedRecipeDeclaration(self, products, self.tier, self.machine, self.circuit, items)
 
 
@@ -369,13 +370,22 @@ class PartialGenericRecipe:
 @dataclass(slots=True)
 class MachineSpec(Parsed):
     tier: TierSpec
-    name: str
+    machine: Varname | str
     circuit: int
-    start: Lexeme
-    end: Lexeme
+
+    @property
+    def name(self) -> str:
+        if isinstance(self.machine, str):
+            return self.machine
+        else:
+            return self.machine.name
+
+    @property
+    def qname(self) -> str:
+        return self.name
 
 
-Workbench_spec = MachineSpec(None, None, TierSpec.ULV, 'workbench', 0)
+Workbench_spec = MachineSpec(FakeLexeme, FakeLexeme, TierSpec.ULV, 'workbench', 0)
 
 
 class ImpliedNumber:
@@ -402,6 +412,10 @@ class QuantifiedValue(ABC):
         return self.item.name
 
     @property
+    def qname(self):
+        return self.item.qname
+
+    @property
     def material(self):
         return self.item.material
 
@@ -414,6 +428,13 @@ class QuantifiedValue(ABC):
         self.item = item
         self.quantity = quantity.amount
         self.original_spec = quantity
+
+    @property
+    def spec(self):
+        if isinstance(self.original_spec, ImpliedNumber):
+            return self.item
+        else:
+            return self.original_spec
 
     def substitute(self, item: Varname | MaterializedVarname) -> QuantifiedValue:
         return type(self)(self.original_spec, self.item.substitute(item))
@@ -429,7 +450,7 @@ class QuantifiedItem(QuantifiedValue):
     def __repr__(self):
         return f"QuantifiedItem({self.quantity}, {self.item}"
 
-    def resolve(self, db: RecipeDB):
+    def resolve(self, db: RecipeDB) -> Tool | Quantified[NamedItem] | Quantified[MaterializedComponent]:
         if self.generic:
             raise NotImplementedError
 
@@ -562,3 +583,10 @@ class MaterializeStarItem:
     materialize_star: MaterializeStar
     component: Varname
     material: Varname
+
+
+class Implicit[T: (Varname, MaterializedVarname, RecipeDeclaration)]:
+    __slots__ = "val",
+
+    def __init__(self, val: T):
+        self.val = val
