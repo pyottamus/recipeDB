@@ -431,3 +431,4 @@ class RecipeDB:
         fake_recipe = RecipeBase([Quantified(1, fake_item)], to_build, TierSpec.ULV,
                                  0, NullStation, [])
         return Itemizer2(fake_recipe, self)
+#TODO Add tier-restricted solving and get_recipe
